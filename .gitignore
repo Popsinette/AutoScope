@@ -11,3 +11,4 @@ src/generated/
 next-env.d.ts
 test-results/
 playwright-report/
+storage-test/
