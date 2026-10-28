@@ -1,15 +1,22 @@
 "use client";
 
 import { Upload } from "lucide-react";
-import { uploadDocument } from "@/app/actions/documents";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { FormError } from "@/components/ui/form-error";
-import { useFormAction } from "@/components/ui/use-form-action";
+import { useFormAction, type FormState } from "@/components/ui/use-form-action";
 import { DOCUMENT_LABELS, enumOptions } from "@/lib/labels";
 
-export function UploadDocumentForm({ vehicleId, interventions }: { vehicleId: string; interventions: { id: string; label: string }[] }) {
-  const { state, pending, onSubmit, fe } = useFormAction(uploadDocument);
+export function UploadDocumentForm({
+  vehicleId,
+  interventions,
+  action,
+}: {
+  vehicleId: string;
+  interventions: { id: string; label: string }[];
+  action: (form: FormData) => Promise<FormState>;
+}) {
+  const { state, pending, onSubmit, fe } = useFormAction(action);
   return (
     <form onSubmit={onSubmit} className="grid gap-4 p-4 pt-0 sm:grid-cols-2 sm:p-5 sm:pt-0">
       <input type="hidden" name="vehicleId" value={vehicleId} />

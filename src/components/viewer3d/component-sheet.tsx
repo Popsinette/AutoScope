@@ -10,7 +10,7 @@ import { formatDate, formatKm } from "@/lib/format";
 import { ELECTRONIC_LABELS, FAMILY_LABELS, INTERVENTION_LABELS, RELIABILITY_LABELS } from "@/lib/labels";
 import type { InterventionCategory, InfoReliability, ComponentFamily, ElectronicKind } from "@/generated/prisma/enums";
 
-interface Sheet {
+export interface Sheet {
   component: {
     id: string;
     slug: string;
@@ -24,37 +24,48 @@ interface Sheet {
     source: string;
     reliability: InfoReliability;
   };
-  interventions: { id: string; date: string; mileage: number; category: InterventionCategory; description: string }[];
+  interventions: { id: string; date: string | Date; mileage: number; category: InterventionCategory; description: string }[];
   documents: { id: string; title: string; mimeType: string }[];
 }
 
 type State = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; sheet: Sheet };
+
+export type SheetLoader = (slug: string, vehicleId: string | null, signal: AbortSignal) => Promise<Sheet>;
+
+/** Chargement par l'API de l'application serveur. */
+export const fetchSheet: SheetLoader = async (slug, vehicleId, signal) => {
+  const res = await fetch(`/api/composants/${encodeURIComponent(slug)}${vehicleId ? `?v=${vehicleId}` : ""}`, { signal });
+  if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "Chargement impossible.");
+  return res.json();
+};
 
 export function ComponentSheet({
   slug,
   vehicleId,
   illustrative,
   onClose,
+  loadSheet = fetchSheet,
+  fileHref = (id) => `/api/documents/${id}`,
 }: {
   slug: string;
   vehicleId: string | null;
   illustrative: boolean;
   onClose: () => void;
+  loadSheet?: SheetLoader;
+  fileHref?: (documentId: string) => string;
 }) {
   const [state, setState] = useState<State>({ status: "loading" });
 
   useEffect(() => {
     const controller = new AbortController();
     setState({ status: "loading" });
-    fetch(`/api/composants/${encodeURIComponent(slug)}${vehicleId ? `?v=${vehicleId}` : ""}`, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "Chargement impossible.");
-        setState({ status: "ready", sheet: await res.json() });
-      })
+    loadSheet(slug, vehicleId, controller.signal)
+      .then((sheet) => setState({ status: "ready", sheet }))
       .catch((e: Error) => {
         if (e.name !== "AbortError") setState({ status: "error", message: e.message });
       });
     return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, vehicleId]);
 
   return (
@@ -95,12 +106,12 @@ export function ComponentSheet({
           {state.message}
         </p>
       )}
-      {state.status === "ready" && <SheetBody sheet={state.sheet} vehicleId={vehicleId} illustrative={illustrative} />}
+      {state.status === "ready" && <SheetBody sheet={state.sheet} vehicleId={vehicleId} illustrative={illustrative} fileHref={fileHref} />}
     </div>
   );
 }
 
-function SheetBody({ sheet, vehicleId, illustrative }: { sheet: Sheet; vehicleId: string | null; illustrative: boolean }) {
+function SheetBody({ sheet, vehicleId, illustrative, fileHref }: { sheet: Sheet; vehicleId: string | null; illustrative: boolean; fileHref: (id: string) => string }) {
   const c = sheet.component;
   const reliability = RELIABILITY_LABELS[c.reliability];
   return (
@@ -171,7 +182,7 @@ function SheetBody({ sheet, vehicleId, illustrative }: { sheet: Sheet; vehicleId
           <ul className="flex flex-col gap-1">
             {sheet.documents.map((d) => (
               <li key={d.id}>
-                <a href={`/api/documents/${d.id}`} className="hover:text-accent-ink">
+                <a href={fileHref(d.id)} className="hover:text-accent-ink">
                   {d.title}
                 </a>
               </li>

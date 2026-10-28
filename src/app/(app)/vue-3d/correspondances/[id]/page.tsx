@@ -1,3 +1,4 @@
+import { saveMappingsAction } from "@/app/actions/models";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -28,6 +29,7 @@ export default async function MappingPage({ params }: PageProps<"/vue-3d/corresp
       <PageHeader title="Correspondances" subtitle={`${model.name} — associez chaque objet du fichier à une fiche composant.`} />
       <Card>
         <MappingForm
+          action={saveMappingsAction}
           modelId={model.id}
           nodeNames={model.nodeNames}
           current={Object.fromEntries(model.mappings.map((m) => [m.nodeName, m.component.slug]))}

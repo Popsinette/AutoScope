@@ -1,3 +1,4 @@
+import { saveVehicle } from "@/app/actions/vehicles";
 import { PageHeader } from "@/components/ui/page-header";
 import { VehicleForm } from "@/components/vehicles/vehicle-form";
 import { requireUser } from "@/server/session";
@@ -9,7 +10,7 @@ export default async function NewVehiclePage() {
   return (
     <>
       <PageHeader title="Ajouter un véhicule" subtitle="Les champs marqués d'un astérisque sont obligatoires." />
-      <VehicleForm cancelHref="/garage" />
+      <VehicleForm cancelHref="/garage" action={saveVehicle} />
     </>
   );
 }

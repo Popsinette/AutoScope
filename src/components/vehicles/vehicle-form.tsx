@@ -1,11 +1,10 @@
 "use client";
 
 import { Lock } from "lucide-react";
-import { saveVehicle } from "@/app/actions/vehicles";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { FormError } from "@/components/ui/form-error";
-import { useFormAction } from "@/components/ui/use-form-action";
+import { useFormAction, type FormState } from "@/components/ui/use-form-action";
 import { ENERGY_LABELS, TRANSMISSION_LABELS, enumOptions } from "@/lib/labels";
 import { toDateInput } from "@/lib/format";
 
@@ -26,8 +25,18 @@ export interface VehicleFormValues {
   hasPhoto?: boolean;
 }
 
-export function VehicleForm({ initial = {}, cancelHref }: { initial?: VehicleFormValues; cancelHref: string }) {
-  const { state, pending, onSubmit, fe } = useFormAction(saveVehicle);
+export function VehicleForm({
+  initial = {},
+  cancelHref,
+  action,
+  photoHint = "JPEG, PNG ou WebP, 8 Mo maximum.",
+}: {
+  initial?: VehicleFormValues;
+  cancelHref: string;
+  action: (form: FormData) => Promise<FormState>;
+  photoHint?: string;
+}) {
+  const { state, pending, onSubmit, fe } = useFormAction(action);
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-6" encType="multipart/form-data">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
@@ -68,7 +77,7 @@ export function VehicleForm({ initial = {}, cancelHref }: { initial?: VehicleFor
         <Field label="Date d'acquisition" htmlFor="acquiredAt" error={fe.acquiredAt}>
           <Input id="acquiredAt" name="acquiredAt" type="date" defaultValue={toDateInput(initial.acquiredAt)} invalid={!!fe.acquiredAt} />
         </Field>
-        <Field label="Photo" htmlFor="photo" error={fe.photo} hint="JPEG, PNG ou WebP, 8 Mo maximum." className="sm:col-span-2">
+        <Field label="Photo" htmlFor="photo" error={fe.photo} hint={photoHint} className="sm:col-span-2">
           <Input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" invalid={!!fe.photo} className="file:mr-3 file:rounded-md file:border-0 file:bg-surface-3 file:px-3 file:py-1 file:text-ink" />
           {initial.hasPhoto && (
             <label className="mt-1 flex items-center gap-2 text-xs text-muted">

@@ -2,11 +2,10 @@
 
 import { Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { saveIntervention } from "@/app/actions/interventions";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { FormError } from "@/components/ui/form-error";
-import { useFormAction } from "@/components/ui/use-form-action";
+import { useFormAction, type FormState } from "@/components/ui/use-form-action";
 import { centsToInput, formatEuros, parseEurosToCents, toDateInput } from "@/lib/format";
 import { FAMILY_LABELS, INTERVENTION_LABELS, enumOptions } from "@/lib/labels";
 
@@ -40,14 +39,16 @@ export function InterventionForm({
   components,
   cancelHref,
   completesReminderId,
+  action,
 }: {
   vehicleId: string;
   initial?: InterventionFormValues;
   components: ComponentOption[];
   cancelHref: string;
   completesReminderId?: string;
+  action: (form: FormData) => Promise<FormState>;
 }) {
-  const { state, pending, onSubmit, fe } = useFormAction(saveIntervention);
+  const { state, pending, onSubmit, fe } = useFormAction(action);
   const [parts, setParts] = useState<PartRow[]>(
     (initial.replacedParts ?? []).map((p, i) => ({ key: i, name: p.name, reference: p.reference ?? "", quantity: p.quantity })),
   );

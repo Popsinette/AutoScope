@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/field";
 import { ELECTRONIC_LABELS, FAMILY_LABELS } from "@/lib/labels";
 import { MODES, modeAvailability, modeToReveal, type ViewerMode } from "@/lib/viewer-modes";
 import type { ComponentFamily, ElectronicKind } from "@/generated/prisma/enums";
-import { ComponentSheet } from "./component-sheet";
+import { ComponentSheet, type SheetLoader } from "./component-sheet";
 import { ELECTRONIC_COLORS, FAMILY_COLORS } from "./palette";
 import type { CameraPreset, ExplorerComponent, ExplorerModel } from "./types";
 
@@ -74,11 +74,15 @@ export function Explorer({
   components,
   vehicleId,
   initialSlug,
+  loadSheet,
+  fileHref,
 }: {
   model: ExplorerModel;
   components: ExplorerComponent[];
   vehicleId: string | null;
   initialSlug: string | null;
+  loadSheet?: SheetLoader;
+  fileHref?: (documentId: string) => string;
 }) {
   const bySlug = useMemo(() => Object.fromEntries(components.map((c) => [c.slug, c])), [components]);
   // Composants réellement présents dans ce modèle.
@@ -399,7 +403,7 @@ export function Explorer({
           </button>
         )}
         {selected ? (
-          <ComponentSheet key={selected} slug={selected} vehicleId={vehicleId} illustrative={model.isIllustrative} onClose={() => setSelected(null)} />
+          <ComponentSheet key={selected} slug={selected} vehicleId={vehicleId} illustrative={model.isIllustrative} onClose={() => setSelected(null)} loadSheet={loadSheet} fileHref={fileHref} />
         ) : (
           <div className="p-5 text-sm text-muted">
             <p className="font-medium text-ink">Sélectionnez une pièce</p>

@@ -2,9 +2,16 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
-import { selectVehicle } from "@/app/actions/selection";
 
-export function VehicleSwitcher({ vehicles, selectedId }: { vehicles: { id: string; label: string }[]; selectedId: string | null }) {
+export function VehicleSwitcher({
+  vehicles,
+  selectedId,
+  select,
+}: {
+  vehicles: { id: string; label: string }[];
+  selectedId: string | null;
+  select: (vehicleId: string) => Promise<unknown>;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -20,7 +27,7 @@ export function VehicleSwitcher({ vehicles, selectedId }: { vehicles: { id: stri
         onChange={(e) => {
           const id = e.target.value;
           start(async () => {
-            await selectVehicle(id);
+            await select(id);
             const next = new URLSearchParams(params);
             next.delete("v");
             router.replace(next.size ? `${pathname}?${next}` : pathname);

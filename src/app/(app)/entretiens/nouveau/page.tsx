@@ -1,3 +1,4 @@
+import { saveIntervention } from "@/app/actions/interventions";
 import { InterventionForm } from "@/components/interventions/intervention-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { NoVehicle } from "@/components/vehicles/no-vehicle";
@@ -31,6 +32,7 @@ export default async function NewInterventionPage({ searchParams }: { searchPara
         vehicleId={vehicle.id}
         components={components}
         cancelHref={`/entretiens?v=${vehicle.id}`}
+        action={saveIntervention}
         completesReminderId={reminder && !reminder.completedAt ? reminder.id : undefined}
         initial={{ mileage: vehicle.mileage, category: reminder?.category, description: reminder?.title, componentIds: preselected }}
       />

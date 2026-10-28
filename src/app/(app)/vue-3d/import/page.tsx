@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, FileBox, Unlink, Upload } from "lucide-react";
-import { detachModelAction } from "@/app/actions/models";
+import { detachModelAction, importModel } from "@/app/actions/models";
 import { ImportModelForm } from "@/components/models/import-form";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -67,7 +67,7 @@ export default async function ImportModelPage({ searchParams }: { searchParams: 
           )}
           <Card>
             <CardHeader icon={Upload} title={ownModel ? "Remplacer par un autre fichier" : "Importer un fichier GLB"} subtitle="Le fichier reste privé et n’est servi qu’à votre compte." />
-            <ImportModelForm vehicleId={vehicle.id} defaultName={`${vehicleLabel(vehicle)} — modèle 3D`} />
+            <ImportModelForm action={importModel} vehicleId={vehicle.id} defaultName={`${vehicleLabel(vehicle)} — modèle 3D`} />
           </Card>
         </div>
         <Card>

@@ -2,11 +2,10 @@
 
 import { Search, Wand2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { saveMappingsAction } from "@/app/actions/models";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { FormError } from "@/components/ui/form-error";
-import { useFormAction } from "@/components/ui/use-form-action";
+import { useFormAction, type FormState } from "@/components/ui/use-form-action";
 import { suggestComponentSlug } from "@/lib/gltf";
 import { FAMILY_LABELS } from "@/lib/labels";
 
@@ -16,14 +15,16 @@ export function MappingForm({
   current,
   components,
   viewHref,
+  action,
 }: {
   modelId: string;
   nodeNames: string[];
   current: Record<string, string>;
   components: { slug: string; name: string; family: keyof typeof FAMILY_LABELS }[];
   viewHref: string;
+  action: (form: FormData) => Promise<FormState>;
 }) {
-  const { state, pending, onSubmit } = useFormAction(saveMappingsAction);
+  const { state, pending, onSubmit } = useFormAction(action);
   const [values, setValues] = useState<Record<string, string>>(current);
   const [query, setQuery] = useState("");
   const [onlyEmpty, setOnlyEmpty] = useState(false);

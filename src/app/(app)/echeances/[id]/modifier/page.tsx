@@ -1,3 +1,4 @@
+import { saveReminder } from "@/app/actions/reminders";
 import { notFound } from "next/navigation";
 import { ReminderForm } from "@/components/reminders/reminder-form";
 import { Card } from "@/components/ui/card";
@@ -17,7 +18,7 @@ export default async function EditReminderPage({ params }: PageProps<"/echeances
     <>
       <PageHeader title="Modifier l’échéance" subtitle={vehicleLabel(reminder.vehicle)} />
       <Card className="pt-5">
-        <ReminderForm vehicleId={reminder.vehicleId} currentMileage={reminder.vehicle.mileage} initial={reminder} cancelHref={`/echeances?v=${reminder.vehicleId}`} />
+        <ReminderForm vehicleId={reminder.vehicleId} currentMileage={reminder.vehicle.mileage} initial={reminder} cancelHref={`/echeances?v=${reminder.vehicleId}`} action={saveReminder} />
       </Card>
     </>
   );

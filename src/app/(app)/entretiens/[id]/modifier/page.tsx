@@ -1,3 +1,4 @@
+import { saveIntervention } from "@/app/actions/interventions";
 import { notFound } from "next/navigation";
 import { InterventionForm } from "@/components/interventions/intervention-form";
 import { PageHeader } from "@/components/ui/page-header";
@@ -21,6 +22,7 @@ export default async function EditInterventionPage({ params }: PageProps<"/entre
         vehicleId={intervention.vehicleId}
         components={components}
         cancelHref={`/entretiens/${intervention.id}`}
+        action={saveIntervention}
         initial={{ ...intervention, componentIds: intervention.components.map((c) => c.componentId) }}
       />
     </>

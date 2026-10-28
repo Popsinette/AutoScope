@@ -1,3 +1,4 @@
+import { saveExpense } from "@/app/actions/expenses";
 import { notFound, redirect } from "next/navigation";
 import { ExpenseForm } from "@/components/expenses/expense-form";
 import { Card } from "@/components/ui/card";
@@ -17,7 +18,7 @@ export default async function EditExpensePage({ params }: PageProps<"/depenses/[
     <>
       <PageHeader title="Modifier la dépense" />
       <Card className="pt-5">
-        <ExpenseForm vehicleId={expense.vehicleId} initial={expense} cancelHref={`/depenses?v=${expense.vehicleId}`} />
+        <ExpenseForm vehicleId={expense.vehicleId} initial={expense} cancelHref={`/depenses?v=${expense.vehicleId}`} action={saveExpense} />
       </Card>
     </>
   );

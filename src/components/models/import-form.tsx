@@ -1,14 +1,21 @@
 "use client";
 
 import { Upload } from "lucide-react";
-import { importModel } from "@/app/actions/models";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { FormError } from "@/components/ui/form-error";
-import { useFormAction } from "@/components/ui/use-form-action";
+import { useFormAction, type FormState } from "@/components/ui/use-form-action";
 
-export function ImportModelForm({ vehicleId, defaultName }: { vehicleId: string; defaultName: string }) {
-  const { state, pending, onSubmit, fe } = useFormAction(importModel);
+export function ImportModelForm({
+  vehicleId,
+  defaultName,
+  action,
+}: {
+  vehicleId: string;
+  defaultName: string;
+  action: (form: FormData) => Promise<FormState>;
+}) {
+  const { state, pending, onSubmit, fe } = useFormAction(action);
   return (
     <form onSubmit={onSubmit} className="grid gap-4 p-4 pt-0 sm:grid-cols-2 sm:p-5 sm:pt-0">
       <input type="hidden" name="vehicleId" value={vehicleId} />

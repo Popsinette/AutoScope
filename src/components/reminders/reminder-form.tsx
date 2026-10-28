@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { saveReminder } from "@/app/actions/reminders";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { FormError } from "@/components/ui/form-error";
-import { useFormAction } from "@/components/ui/use-form-action";
+import { useFormAction, type FormState } from "@/components/ui/use-form-action";
 import { toDateInput } from "@/lib/format";
 import { INTERVENTION_LABELS, ORIGIN_LABELS, enumOptions } from "@/lib/labels";
 
@@ -14,13 +13,15 @@ export function ReminderForm({
   currentMileage,
   initial,
   cancelHref,
+  action,
 }: {
   vehicleId: string;
   currentMileage: number;
   initial?: { id: string; title: string; category: string; dueDate: Date | null; dueMileage: number | null; origin: string; sourceReference: string | null; notes: string | null };
   cancelHref?: string;
+  action: (form: FormData) => Promise<FormState>;
 }) {
-  const { state, pending, onSubmit, fe } = useFormAction(saveReminder);
+  const { state, pending, onSubmit, fe } = useFormAction(action);
   const [origin, setOrigin] = useState(initial?.origin ?? "UTILISATEUR");
   return (
     <form onSubmit={onSubmit} className="grid gap-4 p-4 pt-0 sm:grid-cols-2 sm:p-5 sm:pt-0 lg:grid-cols-4">

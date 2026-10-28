@@ -1,10 +1,9 @@
 "use client";
 
-import { saveExpense } from "@/app/actions/expenses";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { FormError } from "@/components/ui/form-error";
-import { useFormAction } from "@/components/ui/use-form-action";
+import { useFormAction, type FormState } from "@/components/ui/use-form-action";
 import { centsToInput, toDateInput } from "@/lib/format";
 import { EXPENSE_LABELS, enumOptions } from "@/lib/labels";
 
@@ -12,12 +11,14 @@ export function ExpenseForm({
   vehicleId,
   initial,
   cancelHref,
+  action,
 }: {
   vehicleId: string;
   initial?: { id: string; date: Date; category: string; amountCents: number; label: string; notes: string | null };
   cancelHref?: string;
+  action: (form: FormData) => Promise<FormState>;
 }) {
-  const { state, pending, onSubmit, fe } = useFormAction(saveExpense);
+  const { state, pending, onSubmit, fe } = useFormAction(action);
   return (
     <form onSubmit={onSubmit} className="grid gap-4 p-4 pt-0 sm:grid-cols-2 sm:p-5 sm:pt-0 lg:grid-cols-4">
       <input type="hidden" name="vehicleId" value={vehicleId} />

@@ -1,3 +1,4 @@
+import { saveVehicle } from "@/app/actions/vehicles";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { VehicleForm } from "@/components/vehicles/vehicle-form";
@@ -14,7 +15,7 @@ export default async function EditVehiclePage({ params }: PageProps<"/garage/[id
   return (
     <>
       <PageHeader title={`Modifier — ${vehicleLabel(vehicle)}`} />
-      <VehicleForm initial={{ ...vehicle, hasPhoto: !!vehicle.photoKey }} cancelHref={`/garage/${vehicle.id}`} />
+      <VehicleForm initial={{ ...vehicle, hasPhoto: !!vehicle.photoKey }} cancelHref={`/garage/${vehicle.id}`} action={saveVehicle} />
     </>
   );
 }
