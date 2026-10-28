@@ -20,7 +20,7 @@ export default async function ViewerPage({ searchParams }: { searchParams: Promi
   const { selected: vehicle } = await resolveSelectedVehicle(user.id, param(sp, "v"));
   const forceGeneric = param(sp, "demo") === "1";
   const own = vehicle?.model3dId && vehicle.model3dId !== DEMO_MODEL_ID ? await getExplorerModel(user.id, vehicle.model3dId) : null;
-  const { model, preferred } = resolveVehicleModel(vehicle, own, { forceGeneric, demoModelId: DEMO_MODEL_ID });
+  const { model, preferred } = resolveVehicleModel(vehicle, own, { forceGeneric });
   const components = await listComponents();
 
   return (

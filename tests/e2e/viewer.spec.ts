@@ -2,12 +2,19 @@ import { expect, test } from "@playwright/test";
 import { makeTestGlb } from "../helpers/glb";
 import { addVehicle, signUp } from "./helpers";
 
-test("@mobile un véhicule sans modèle affiche un état explicite", async ({ page }) => {
+test("@mobile un véhicule sans modèle dédié affiche le modèle de présentation, signalé comme tel", async ({ page }) => {
   await signUp(page);
   const vehicleId = await addVehicle(page);
-  await page.goto(`/vue-3d?v=${vehicleId}`);
-  await expect(page.getByRole("heading", { name: "Aucun modèle 3D pour ce véhicule" })).toBeVisible();
-  await expect(page.locator("canvas")).toHaveCount(0);
+  await page.goto(`/tableau-de-bord?v=${vehicleId}`);
+  const showcase = page.getByTestId("vehicle-showcase");
+  await expect(showcase).toHaveAttribute("data-ready", "1", { timeout: 60_000 });
+  await expect(showcase).toHaveAttribute("data-model", "car-concept");
+  await expect(page.getByText("Modèle 3D de présentation : ne représente pas ce véhicule.")).toBeVisible();
+  await page.getByRole("link", { name: "Explorer en 3D" }).click();
+  await expect(page).toHaveURL(/\/vue-3d/);
+  const scene = page.getByTestId("scene-container");
+  await expect(scene).toHaveAttribute("data-ready", "1", { timeout: 60_000 });
+  await expect(page.getByText(/Modèle de présentation générique : il ne représente pas votre/)).toBeVisible();
 });
 
 test("@mobile scène 3D de démonstration : sélection d'une pièce et fiche", async ({ page, isMobile }) => {
@@ -15,18 +22,18 @@ test("@mobile scène 3D de démonstration : sélection d'une pièce et fiche", a
   await page.goto("/vue-3d?demo=1");
   const scene = page.getByTestId("scene-container");
   await expect(scene).toHaveAttribute("data-ready", "1", { timeout: 60_000 });
-  await expect(page.getByText("Véhicule générique de démonstration").first()).toBeVisible();
+  await expect(page.getByText(/Modèle de présentation générique/).first()).toBeVisible();
 
   // Sélection au clic / toucher dans la scène (vue initiale : la carrosserie occupe le centre).
   const box = (await scene.locator("canvas").boundingBox())!;
   if (isMobile) await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
   else await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await expect(scene).not.toHaveAttribute("data-selected", "");
-  await expect(page.getByRole("heading", { level: 2 }).filter({ hasText: /Caisse|Capot|Vitrage|Portières/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2 }).filter({ hasText: /Caisse|Capot|Vitrage|Portières|Sièges|Garnitures/ })).toBeVisible();
   await page.getByRole("button", { name: "Fermer la fiche" }).click();
 
   // Sélection depuis la liste accessible : la pièce interne est révélée.
-  if (isMobile) await page.getByRole("button", { name: "Pièces" }).click();
+  await page.getByRole("button", { name: "Pièces", exact: true }).click();
   await page.getByRole("button", { name: "Calculateur moteur (ECU)" }).click();
   await expect(scene).toHaveAttribute("data-selected", "calculateur-moteur");
   await expect(scene).toHaveAttribute("data-mode", "electronique");
@@ -38,6 +45,8 @@ test("@mobile scène 3D de démonstration : sélection d'une pièce et fiche", a
 });
 
 test("modes d'affichage, vues de caméra et vue éclatée", async ({ page }) => {
+  // Nombreux changements de vue, chacun rendu par WebGL logiciel en CI.
+  test.slow();
   await signUp(page);
   await page.goto("/vue-3d?demo=1");
   const scene = page.getByTestId("scene-container");
@@ -61,10 +70,19 @@ test("modes d'affichage, vues de caméra et vue éclatée", async ({ page }) => 
   await expect(slider).toHaveValue("0");
   await page.getByRole("button", { name: "Électronique", exact: true }).click();
   await expect(page.getByLabel("Légende")).toContainText("Calculateurs (ECU)");
-  for (const view of ["Avant", "Arrière", "Profil", "Dessus", "Intérieur"]) await page.getByRole("button", { name: view, exact: true }).click();
+  await page.getByRole("button", { name: "Extérieur", exact: true }).click();
+  for (const view of ["Avant", "Arrière", "Gauche", "Droite", "Dessus", "Intérieur", "3/4"]) await page.getByRole("button", { name: view, exact: true }).click();
   await page.getByRole("button", { name: "Réinitialiser la caméra" }).click();
 
+  await page.getByRole("button", { name: "Zoomer", exact: true }).click();
+  await page.getByRole("button", { name: "Dézoomer" }).click();
+
+  // Teintes de carrosserie (variantes du modèle).
+  await page.getByRole("radio", { name: "Teinte Graphite" }).first().click();
+  await expect(page.getByRole("radio", { name: "Teinte Graphite" }).first()).toHaveAttribute("aria-checked", "true");
+
   // Masquer une famille depuis l'arborescence.
+  await page.getByRole("button", { name: "Pièces", exact: true }).click();
   await page.getByRole("button", { name: "Masquer la famille Carrosserie" }).click();
   await expect(page.getByRole("button", { name: "Afficher la famille Carrosserie" })).toBeVisible();
 });
@@ -97,6 +115,7 @@ test("import d'un GLB, correspondances et modes disponibles selon le contenu", a
   await expect(scene).toHaveAttribute("data-ready", "1", { timeout: 60_000 });
   await expect(page.getByRole("button", { name: "Mécanique", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Électronique", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Pièces", exact: true }).click();
   await expect(page.getByText("1 objet(s) sans fiche")).toBeVisible();
   await page.getByRole("button", { name: "Bloc-moteur et culasse" }).click();
   await expect(scene).toHaveAttribute("data-selected", "bloc-moteur");

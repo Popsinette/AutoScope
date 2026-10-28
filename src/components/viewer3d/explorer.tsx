@@ -1,8 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useProgress } from "@react-three/drei";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SceneBoundary, useLowQuality, useMediaQuery, useResolvedModel, webglAvailable } from "./scene-utils";
 import { Eye, EyeOff, Info, ListTree, Loader2, Maximize2, Minus, Plus, RotateCcw, Search, X } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/field";
@@ -34,69 +34,6 @@ function SceneLoading({ label, progress }: { label: string; progress?: number })
       </div>
     </div>
   );
-}
-
-/** Suivi du téléchargement du modèle (barre de progression). */
-function LoadProgress() {
-  const { active, progress } = useProgress();
-  if (!active) return null;
-  return <SceneLoading label="Chargement du modèle 3D…" progress={progress} />;
-}
-
-export class SceneBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  componentDidCatch(error: unknown) {
-    console.error("Scène 3D indisponible :", error);
-  }
-  render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
-  }
-}
-
-export function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia(query);
-    setMatches(mq.matches);
-    const on = () => setMatches(mq.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, [query]);
-  return matches;
-}
-
-export function webglAvailable() {
-  try {
-    const canvas = document.createElement("canvas");
-    return !!(canvas.getContext("webgl2") || canvas.getContext("webgl"));
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Modèle effectivement affiché : le modèle dédié au véhicule s'il est installé
- * (fichier présent), sinon le modèle de repli. Un fichier absent ne casse rien.
- */
-export function useResolvedModel(model: ExplorerModel, preferred: ExplorerModel | null | undefined) {
-  const [state, setState] = useState<{ model: ExplorerModel; missing: ExplorerModel | null; checked: boolean }>({ model, missing: null, checked: !preferred });
-  useEffect(() => {
-    if (!preferred?.url) {
-      setState({ model, missing: null, checked: true });
-      return;
-    }
-    let cancelled = false;
-    fetch(preferred.url, { method: "HEAD" })
-      .then((res) => !cancelled && setState(res.ok ? { model: preferred, missing: null, checked: true } : { model, missing: preferred, checked: true }))
-      .catch(() => !cancelled && setState({ model, missing: preferred, checked: true }));
-    return () => {
-      cancelled = true;
-    };
-  }, [model, preferred]);
-  return state;
 }
 
 const PRESETS: { key: CameraPreset; label: string; title: string; needsInterior?: boolean }[] = [
@@ -158,7 +95,7 @@ export function Explorer({
   const [panelOpen, setPanelOpen] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
-  const lowQuality = useMediaQuery("(max-width: 768px), (pointer: coarse)");
+  const lowQuality = useLowQuality();
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const animation = useRef<number | null>(null);
   const sceneRef = useRef<HTMLElement>(null);
@@ -385,7 +322,6 @@ export function Explorer({
                 onReady={onReady}
               />
             </div>
-            <LoadProgress />
           </SceneBoundary>
         )}
 

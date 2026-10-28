@@ -15,6 +15,8 @@ const shim = (file: string) => path.resolve(import.meta.dirname, "src/shims", fi
 export default defineConfig({
   root: import.meta.dirname,
   base: process.env.DEMO_BASE ?? "/",
+  // Modèles 3D livrés (public/models) partagés avec l'application Next.js.
+  publicDir: path.resolve(root, "public"),
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: [

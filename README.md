@@ -102,7 +102,8 @@ src/app/actions        server actions (validation zod + appel des services)
 src/app/api            fichiers privés, export CSV/JSON, fiches composants, Better Auth
 src/server             services métier : chaque requête est filtrée par l'utilisateur
 src/lib                logique pure testée (échéances, dépenses, modes 3D, GLB, validation)
-src/components/viewer3d explorateur 3D (scène, véhicule procédural, fiche, arborescence)
+src/components/viewer3d explorateur 3D et vitrine d’accueil (scène, studio, fiche, arborescence)
+public/models          modèles GLB livrés (« Car Concept », CC BY 4.0) — npm run models:fetch
 src/components/views   affichage des écrans, partagé par l'app serveur et la démo
 demo/                  démo hors ligne (Vite, React Router, stockage navigateur)
 tests/                 Vitest (unit, integration) et Playwright (e2e, e2e-demo)
@@ -124,6 +125,6 @@ Les rappels sont affichés dans l’application (tableau de bord, badge du menu)
 
 ## Documentation
 
-- [Import et correspondance des modèles 3D](docs/MODELES_3D.md)
+- [Modèles 3D : catalogue, ajout d’un modèle dédié, import](docs/MODELES_3D.md)
 - [Provenance et licences](docs/LICENCES.md)
 - [Bilan : fonctionnel, simulé, à intégrer](docs/BILAN.md)

@@ -21,8 +21,11 @@ import {
 } from "./pages/records";
 import { SettingsPage } from "./pages/settings";
 import { ImportModelPage, MappingPage, ViewerPage } from "./pages/viewer";
+import { setAssetBase } from "@/lib/vehicle-models";
 import { demoStore } from "./store";
 import { seedDemo } from "./store/seed";
+
+setAssetBase(import.meta.env.BASE_URL);
 
 function App() {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");

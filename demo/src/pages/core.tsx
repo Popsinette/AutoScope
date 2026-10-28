@@ -7,19 +7,22 @@ import { PageHeader } from "@/components/ui/page-header";
 import { VehicleForm } from "@/components/vehicles/vehicle-form";
 import { CATALOG, CATALOG_COMPAT_SOURCE } from "../../../prisma/demo-data/catalog";
 import { DEMO_MODEL_ID } from "@/lib/demo-model";
+import { GENERIC_MODEL, resolveVehicleModel } from "@/lib/vehicle-models";
 import { FAMILY_LABELS } from "@/lib/labels";
 import { isEnumValue } from "@/lib/search-params";
 import { vehicleLabel } from "@/lib/vehicle";
 import { useDemoActions } from "../actions";
 import { photoSrc, useDemo, useParam } from "../hooks";
 import { NotFound } from "./not-found";
+import { glbModel } from "./viewer";
 
-const MODEL_NAMES: Record<string, { name: string; isIllustrative: boolean }> = { [DEMO_MODEL_ID]: { name: "Véhicule générique de démonstration", isIllustrative: true } };
+const MODEL_NAMES: Record<string, { name: string; isIllustrative: boolean }> = { [DEMO_MODEL_ID]: { name: GENERIC_MODEL.name, isIllustrative: true } };
 
 export function DashboardPage() {
   const store = useDemo();
   const vehicle = store.resolveSelected(useParam("v"));
   const year = new Date().getFullYear();
+  const owned = vehicle ? store.model(vehicle.model3dId) : null;
   return (
     <DashboardView
       firstName="Visiteur"
@@ -30,6 +33,7 @@ export function DashboardPage() {
       prevYearExpenses={vehicle ? store.listExpenses({ vehicleId: vehicle.id, year: year - 1 }) : []}
       year={year}
       photoSrc={photoSrc}
+      showcase={vehicle ? resolveVehicleModel(vehicle, owned ? glbModel(owned) : null) : null}
     />
   );
 }

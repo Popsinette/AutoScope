@@ -16,6 +16,9 @@ export default defineConfig({
     locale: "fr-FR",
     timezoneId: "Europe/Paris",
     trace: "retain-on-failure",
+    // Rendu WebGL logiciel en CI : la rotation automatique de la vitrine (rendu
+    // continu) saturerait le navigateur. Elle est coupée par « mouvement réduit ».
+    reducedMotion: "reduce",
     launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] },
   },
   projects: [

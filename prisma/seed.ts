@@ -16,6 +16,7 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import type { InterventionCategory } from "../src/generated/prisma/enums";
 import { LocalFileStorage } from "../src/server/storage/local";
 import { DEMO_MODEL_ID, DEMO_NODE_MAPPING } from "../src/lib/demo-model";
+import { GENERIC_MODEL } from "../src/lib/vehicle-models";
 import { expenseCategoryFor } from "../src/lib/expenses";
 import { INTERVENTION_LABELS } from "../src/lib/labels";
 import { COMPONENTS, COMPONENT_SOURCE } from "./demo-data/components";
@@ -52,10 +53,11 @@ async function seedComponents() {
 
 async function seedDemoModel(componentIds: Map<string, string>) {
   const data = {
-    name: "Véhicule générique de démonstration",
+    // Identifiant historique conservé : il désigne désormais le modèle de présentation générique.
+    name: GENERIC_MODEL.name,
     kind: "PROCEDURAL_DEMO" as const,
-    source: "Géométrie générée en code par CarView (src/components/viewer3d/demo-car.tsx).",
-    license: "Code source du projet CarView — aucune ressource tierce.",
+    source: GENERIC_MODEL.credit,
+    license: GENERIC_MODEL.license,
     isIllustrative: true,
     nodeNames: Object.keys(DEMO_NODE_MAPPING),
   };

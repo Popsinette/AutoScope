@@ -150,11 +150,11 @@ export const CATALOG_MODELS: CatalogEntry[] = [
     mapping: CONCEPT_MAPPING,
     overlayNodes: CONCEPT_OVERLAY_NODES,
     paints: [
-      { name: "Torched Graphite", label: "Graphite", swatch: "#3c3f45" },
       { name: "Carmine Candy", label: "Carmin", swatch: "#a5131b" },
+      { name: "Torched Graphite", label: "Graphite", swatch: "#3c3f45" },
       { name: "Pearly Swirly", label: "Nacré", swatch: "#e9e6df" },
     ],
-    defaultPaint: "Torched Graphite",
+    defaultPaint: "Carmine Candy",
     bundled: true,
   },
   {
@@ -219,12 +219,12 @@ export function explorerModelFromCatalog(entry: CatalogEntry, vehicleLabel?: str
  * le modèle de présentation générique en repli.
  */
 export function resolveVehicleModel(
-  vehicle: { make: string; model: string; trim: string | null; year: number; model3dId?: string | null } | null,
+  vehicle: { make: string; model: string; trim: string | null; year: number } | null,
   ownModel: ExplorerModel | null,
-  { forceGeneric = false, demoModelId }: { forceGeneric?: boolean; demoModelId?: string } = {},
+  { forceGeneric = false }: { forceGeneric?: boolean } = {},
 ): { model: ExplorerModel; preferred: ExplorerModel | null } {
   if (ownModel && !forceGeneric) return { model: ownModel, preferred: null };
-  const label = vehicle && vehicle.model3dId !== demoModelId ? [vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(" ") : undefined;
+  const label = vehicle ? [vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(" ") : undefined;
   const exact = !forceGeneric ? catalogEntryFor(vehicle) : null;
   return { model: explorerModelFromCatalog(GENERIC_MODEL, label), preferred: exact ? explorerModelFromCatalog(exact) : null };
 }

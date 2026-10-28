@@ -5,7 +5,7 @@
  * import) et le véhicule procédural. Il s'appuie uniquement sur les noms des
  * objets et la table de correspondance nœud → fiche composant.
  */
-import { CameraControls, ContactShadows, Environment, Lightformer, MeshReflectorMaterial, useGLTF } from "@react-three/drei";
+import { CameraControls, ContactShadows, Environment, Lightformer, MeshReflectorMaterial, useGLTF, useProgress } from "@react-three/drei";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import CameraControlsImpl from "camera-controls";
 import { forwardRef, Suspense, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from "react";
@@ -200,6 +200,8 @@ const ModelController = forwardRef<Controller, Omit<SceneProps, "camera" | "focu
   function ModelController(props, ref) {
     const { model, components, mode, selectedSlug, hiddenFamilies, explode, onSelect, onHover, onReady, controls, reducedMotion, ghostOpacity = 0.12, isolate = false, paint, showcase } = props;
     const invalidate = useThree((s) => s.invalidate);
+    const camera = useThree((s) => s.camera);
+    const viewport = useThree((s) => s.size);
     const demoRef = useRef<THREE.Group>(null);
     const parts = useRef<Part[]>([]);
     const nodes = useRef<MovableNode[]>([]);
@@ -327,6 +329,11 @@ const ModelController = forwardRef<Controller, Omit<SceneProps, "camera" | "focu
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(apply, [mode, selectedSlug, hiddenFamilies, explode, ghostOpacity, isolate]);
+    // Vitrine : recadrage quand le format change (rotation du téléphone, redimensionnement).
+    useEffect(() => {
+      if (showcase && registered.current) frame("reset", false);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [viewport.width, viewport.height]);
     useEffect(() => {
       if (!registered.current) return;
       void applyPaint().then(apply);
@@ -349,23 +356,35 @@ const ModelController = forwardRef<Controller, Omit<SceneProps, "camera" | "focu
       if (box.isEmpty()) return;
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
-      const d = Math.max(size.x, size.z) * (showcase ? 1.12 : mode === "eclatee" ? 1.75 : 1.4);
-      const h = size.y;
+      // Distance calculée pour que le véhicule tienne dans le cadre quel que soit le format (portrait mobile compris).
+      const cam = camera as THREE.PerspectiveCamera;
+      const vfov = THREE.MathUtils.degToRad(cam.fov);
+      const hfov = 2 * Math.atan(Math.tan(vfov / 2) * cam.aspect);
+      const radius = Math.max(size.x, size.z) * 0.5;
+      // Contrainte horizontale (longueur du véhicule) et verticale (hauteur + profondeur vue en plongée).
+      const fitH = radius / Math.tan(hfov / 2);
+      const fitV = (size.y * 0.5 + radius * 0.45) / Math.tan(vfov / 2);
+      const fit = Math.max(fitH, fitV) * (showcase ? 1.08 : mode === "eclatee" ? 1.55 : 1.2);
       const target = center.clone().setY(center.y * (showcase ? 0.8 : 0.9));
-      c.minDistance = showcase ? d * 0.6 : 0.05;
-      c.maxDistance = d * 3;
-      const look = (x: number, y: number, z: number) => void c.setLookAt(x, y, z, target.x, target.y, target.z, transition);
+      c.minDistance = showcase ? fit * 0.6 : 0.05;
+      c.maxDistance = fit * 3;
+      const look = (dx: number, dy: number, dz: number, distance = fit) => {
+        const dir = new THREE.Vector3(dx, dy, dz).normalize().multiplyScalar(distance);
+        void c.setLookAt(target.x + dir.x, target.y + dir.y, target.z + dir.z, target.x, target.y, target.z, transition);
+      };
+      // Vitrine sur écran large : véhicule décalé vers la droite, à l'écart des informations superposées.
+      if (showcase) void c.setFocalOffset(cam.aspect > 1.3 ? -radius * 0.3 : 0, cam.aspect > 1.3 ? -size.y * 0.1 : -size.y * 0.3, 0, false);
       switch (preset) {
         case "avant":
-          return look(center.x, center.y + h * 0.35, center.z + d);
+          return look(0, 0.35, 1);
         case "arriere":
-          return look(center.x, center.y + h * 0.35, center.z - d);
+          return look(0, 0.35, -1);
         case "gauche":
-          return look(center.x + d, center.y + h * 0.2, center.z);
+          return look(1, 0.15, 0);
         case "droite":
-          return look(center.x - d, center.y + h * 0.2, center.z);
+          return look(-1, 0.15, 0);
         case "dessus":
-          return look(center.x, center.y + d * 1.2, center.z + 0.01);
+          return look(0, 1, 0.001, fit * 1.1);
         case "interieur": {
           const seats = parts.current.filter((p) => p.info?.slug === "sieges" || p.info?.slug === "volant");
           if (seats.length === 0) return;
@@ -379,7 +398,7 @@ const ModelController = forwardRef<Controller, Omit<SceneProps, "camera" | "focu
           return;
         }
         default:
-          return showcase ? look(center.x + d * 0.78, center.y + h * 0.35, center.z + d * 0.78) : look(center.x + d * 0.75, center.y + h * 0.85, center.z + d * 0.85);
+          return showcase ? look(0.8, 0.26, 0.8) : look(0.75, 0.55, 0.85);
       }
     };
 
@@ -507,6 +526,22 @@ function ShowcaseControls({ controls, autoRotate }: { controls: React.RefObject<
   return null;
 }
 
+/** Progression du téléchargement du modèle, affichée par-dessus le canevas. */
+function LoadProgress() {
+  const { active, progress } = useProgress();
+  if (!active) return null;
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-[#0c0d10]/70 text-sm text-ink-2" role="status">
+      <div className="flex flex-col items-center gap-3">
+        <span>Chargement du modèle 3D…</span>
+        <span className="h-1 w-40 overflow-hidden rounded-full bg-surface-3" aria-hidden>
+          <span className="block h-full bg-accent transition-[width]" style={{ width: `${Math.round(progress)}%` }} />
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function Scene(props: SceneProps) {
   const controls = useRef<CameraControls | null>(null);
   const controller = useRef<Controller>(null);
@@ -527,27 +562,30 @@ export default function Scene(props: SceneProps) {
   }, [props.zoom?.nonce]);
 
   return (
-    <Canvas
-      frameloop={showcase && autoRotate && !props.reducedMotion ? "always" : "demand"}
-      dpr={props.lowQuality ? [1, 1.5] : [1, 2]}
-      gl={{ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.08 }}
-      camera={{ position: [6, 2.5, 7], fov: showcase ? 30 : 36, near: 0.02, far: 120 }}
-      onPointerMissed={(e) => {
-        if (e.type === "click") props.onSelect(null);
-      }}
-      // Sur la vitrine, le défilement vertical de la page reste possible au doigt.
-      style={showcase ? { touchAction: "pan-y" } : undefined}
-      onCreated={({ gl }) => {
-        if (showcase) gl.domElement.style.touchAction = "pan-y";
-      }}
-      aria-hidden
-    >
-      <Studio lowQuality={props.lowQuality} />
-      <Suspense fallback={null}>
-        <ModelController ref={controller} {...props} controls={controls} />
-      </Suspense>
-      <CameraControls ref={controls} makeDefault smoothTime={props.reducedMotion ? 0 : 0.35} draggingSmoothTime={0.12} maxPolarAngle={Math.PI * 0.49} />
-      {showcase && <ShowcaseControls controls={controls} autoRotate={autoRotate && !props.reducedMotion} />}
-    </Canvas>
+    <>
+      <Canvas
+        frameloop={showcase && autoRotate && !props.reducedMotion ? "always" : "demand"}
+        dpr={props.lowQuality ? [1, 1.5] : [1, 2]}
+        gl={{ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.08 }}
+        camera={{ position: [6, 2.5, 7], fov: showcase ? 30 : 36, near: 0.02, far: 120 }}
+        onPointerMissed={(e) => {
+          if (e.type === "click") props.onSelect(null);
+        }}
+        // Sur la vitrine, le défilement vertical de la page reste possible au doigt.
+        style={showcase ? { touchAction: "pan-y" } : undefined}
+        onCreated={({ gl }) => {
+          if (showcase) gl.domElement.style.touchAction = "pan-y";
+        }}
+        aria-hidden
+      >
+        <Studio lowQuality={props.lowQuality} />
+        <Suspense fallback={null}>
+          <ModelController ref={controller} {...props} controls={controls} />
+        </Suspense>
+        <CameraControls ref={controls} makeDefault smoothTime={props.reducedMotion ? 0 : 0.35} draggingSmoothTime={0.12} maxPolarAngle={Math.PI * 0.49} />
+        {showcase && <ShowcaseControls controls={controls} autoRotate={autoRotate && !props.reducedMotion} />}
+      </Canvas>
+      <LoadProgress />
+    </>
   );
 }

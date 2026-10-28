@@ -1,4 +1,4 @@
-import { ArrowLeft, Box, FileBox, Info, Unlink, Upload } from "lucide-react";
+import { ArrowLeft, FileBox, Unlink, Upload } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { COMPONENTS } from "../../../prisma/demo-data/components";
 import { ImportModelForm } from "@/components/models/import-form";
@@ -12,7 +12,7 @@ import { NoVehicle } from "@/components/vehicles/no-vehicle";
 import type { SheetLoader } from "@/components/viewer3d/component-sheet";
 import { Explorer } from "@/components/viewer3d/explorer";
 import type { ExplorerModel } from "@/components/viewer3d/types";
-import { DEMO_MODEL_ID, DEMO_NODE_MAPPING } from "@/lib/demo-model";
+import { resolveVehicleModel } from "@/lib/vehicle-models";
 import { formatFileSize } from "@/lib/format";
 import { sanitizeNodeName } from "@/lib/gltf";
 import { vehicleLabel } from "@/lib/vehicle";
@@ -22,20 +22,9 @@ import { demoStore } from "../store";
 import type { DModel } from "../store/types";
 import { NotFound } from "./not-found";
 
-const DEMO_MODEL: ExplorerModel = {
-  id: DEMO_MODEL_ID,
-  kind: "PROCEDURAL_DEMO",
-  name: "Véhicule générique de démonstration",
-  url: null,
-  isIllustrative: true,
-  source: "Géométrie générée en code par CarView (src/components/viewer3d/demo-car.tsx).",
-  license: "Code source du projet CarView — aucune ressource tierce.",
-  mapping: DEMO_NODE_MAPPING,
-};
-
 const EXPLORER_COMPONENTS = COMPONENTS.map((c) => ({ id: c.slug, slug: c.slug, name: c.name, family: c.family, system: c.system, electronicKind: c.electronicKind ?? null }));
 
-const glbModel = (m: DModel): ExplorerModel => ({
+export const glbModel = (m: DModel): ExplorerModel => ({
   id: m.id,
   kind: "GLB",
   name: m.name,
@@ -51,40 +40,10 @@ const loadSheet: SheetLoader = async (slug, vehicleId) => demoStore.componentShe
 export function ViewerPage() {
   const store = useDemo();
   const vehicle = store.resolveSelected(useParam("v"));
-  const forceDemo = useParam("demo") === "1";
+  const forceGeneric = useParam("demo") === "1";
   const composant = useParam("composant") ?? null;
   const owned = vehicle ? store.model(vehicle.model3dId) : null;
-  const vehicleModel = forceDemo ? null : owned ? glbModel(owned) : vehicle?.model3dId === DEMO_MODEL_ID ? DEMO_MODEL : null;
-  const model = vehicleModel ?? (forceDemo || !vehicle ? DEMO_MODEL : null);
-  const usingDemoForOtherVehicle = !vehicleModel && !!model && vehicle?.model3dId !== DEMO_MODEL_ID;
-
-  if (!model) {
-    return (
-      <>
-        <PageHeader title="Vue 3D" subtitle={vehicle ? vehicleLabel(vehicle) : undefined} />
-        <Card className="mx-auto max-w-2xl p-6 sm:p-8">
-          <span className="grid size-12 place-items-center rounded-full border border-line-strong bg-surface-2 text-muted" aria-hidden>
-            <Box size={22} />
-          </span>
-          <h2 className="mt-4 text-lg font-semibold">Aucun modèle 3D pour ce véhicule</h2>
-          <p className="mt-2 text-sm text-muted">
-            CarView ne dispose pas automatiquement d’un modèle détaillé de chaque voiture. Nous n’affichons pas de représentation inventée de la mécanique de votre{" "}
-            {vehicle ? vehicleLabel(vehicle) : "véhicule"}.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            {vehicle && (
-              <ButtonLink href={`/vue-3d/import?v=${vehicle.id}`}>
-                <Upload size={15} aria-hidden /> Importer un modèle GLB
-              </ButtonLink>
-            )}
-            <ButtonLink href={`/vue-3d?${vehicle ? `v=${vehicle.id}&` : ""}demo=1`} variant="secondary">
-              Explorer le véhicule de démonstration
-            </ButtonLink>
-          </div>
-        </Card>
-      </>
-    );
-  }
+  const { model, preferred } = resolveVehicleModel(vehicle, owned ? glbModel(owned) : null, { forceGeneric });
 
   return (
     <>
@@ -92,27 +51,26 @@ export function ViewerPage() {
         title="Vue 3D"
         subtitle={
           <>
-            {model.name} {model.isIllustrative && <DemoBadge className="ml-1" />}
+            {vehicle ? vehicleLabel(vehicle) : "Véhicule de présentation"} {model.isIllustrative && <DemoBadge className="ml-1" />}
           </>
         }
         actions={
           vehicle && (
             <ButtonLink href={`/vue-3d/import?v=${vehicle.id}`} variant="secondary" size="sm">
-              <Upload size={14} aria-hidden /> {owned ? "Gérer le modèle" : "Importer un modèle"}
+              <Upload size={14} aria-hidden /> {owned ? "Gérer le modèle" : "Importer le modèle de ce véhicule"}
             </ButtonLink>
           )
         }
       />
-      {model.isIllustrative && (
-        <p className="mb-4 flex items-start gap-2 rounded-xl border border-info/30 bg-info/10 px-4 py-3 text-sm text-info">
-          <Info size={16} className="mt-0.5 shrink-0" aria-hidden />
-          <span>
-            {usingDemoForOtherVehicle && vehicle ? `Véhicule générique de démonstration : il ne représente pas votre ${vehicleLabel(vehicle)}. ` : "Modèle illustratif : formes et emplacements simplifiés. "}
-            Les fiches décrivent des principes généraux.
-          </span>
-        </p>
-      )}
-      <Explorer key={model.id} model={model} components={EXPLORER_COMPONENTS} vehicleId={vehicle?.id ?? null} initialSlug={composant} loadSheet={loadSheet} fileHref={fileHref} />
+      <Explorer
+        model={model}
+        preferredModel={preferred}
+        components={EXPLORER_COMPONENTS}
+        vehicleId={vehicle?.id ?? null}
+        initialSlug={composant}
+        loadSheet={loadSheet}
+        fileHref={fileHref}
+      />
     </>
   );
 }

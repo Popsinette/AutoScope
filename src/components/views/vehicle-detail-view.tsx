@@ -181,7 +181,7 @@ export function VehicleDetailView({
           <p className="px-5 pb-4 pt-2 text-sm text-muted">
             {vehicle.model3d
               ? `Modèle 3D : ${vehicle.model3d.name}${vehicle.model3d.isIllustrative ? " (illustratif)" : ""}`
-              : "Aucun modèle 3D associé à ce véhicule."}
+              : "Aucun modèle dédié : la vue 3D affiche un modèle de présentation générique."}
           </p>
           <div className="flex flex-wrap gap-2 px-5 pb-5">
             <ButtonLink href={`/documents${q}`} variant="secondary" size="sm">

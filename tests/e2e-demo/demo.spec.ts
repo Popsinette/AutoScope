@@ -57,11 +57,12 @@ test("entretien avec facture puis modification : dépense recalculée", async ({
   await expect(page.getByText("1 ligne")).toBeVisible();
 });
 
-test("vue 3D : sélection d'une pièce et fiche", async ({ page, isMobile }) => {
+test("vue 3D : sélection d'une pièce et fiche", async ({ page }) => {
   await page.goto("vue-3d?demo=1");
   const scene = page.getByTestId("scene-container");
   await expect(scene).toHaveAttribute("data-ready", "1", { timeout: 60_000 });
-  if (isMobile) await page.getByRole("button", { name: "Pièces" }).click();
+  await expect(scene).toHaveAttribute("data-model", "car-concept");
+  await page.getByRole("button", { name: "Pièces", exact: true }).click();
   await page.getByRole("button", { name: "Disques de frein" }).click();
   await expect(scene).toHaveAttribute("data-selected", "disques-frein");
   await expect(page.getByRole("heading", { name: "Disques de frein" })).toBeVisible();
@@ -69,6 +70,11 @@ test("vue 3D : sélection d'une pièce et fiche", async ({ page, isMobile }) => 
   await page.getByRole("button", { name: "Fermer la fiche" }).click();
   await page.getByRole("button", { name: "Vue éclatée", exact: true }).click();
   await expect(scene).toHaveAttribute("data-mode", "eclatee");
+});
+
+test("l'accueil présente le véhicule en 3D", async ({ page }) => {
+  await page.goto("tableau-de-bord");
+  await expect(page.getByTestId("vehicle-showcase")).toHaveAttribute("data-ready", "1", { timeout: 60_000 });
 });
 
 test("réinitialisation de la démo", async ({ page }) => {
