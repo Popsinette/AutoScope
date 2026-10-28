@@ -2,7 +2,7 @@ node_modules/
 .next/
 out/
 coverage/
-storage/
+/storage/
 src/generated/
 .env
 .env.local
@@ -11,5 +11,5 @@ src/generated/
 next-env.d.ts
 test-results/
 playwright-report/
-storage-test/
+/storage-test/
 dist-demo/
