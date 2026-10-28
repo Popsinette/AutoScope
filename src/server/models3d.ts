@@ -5,6 +5,7 @@ import { getStorage, newStorageKey } from "./storage";
 import { requireVehicle } from "./vehicles";
 import { DEMO_MODEL_ID } from "@/lib/demo-model";
 import { sanitizeNodeName } from "@/lib/gltf";
+import { explorerModelFromCatalog, GENERIC_MODEL } from "@/lib/vehicle-models";
 import type { ExplorerModel } from "@/components/viewer3d/types";
 
 /** Modèle accessible : modèle intégré (userId null) ou modèle importé par l'utilisateur. */
@@ -16,6 +17,8 @@ export async function getAccessibleModel(userId: string, id: string) {
 }
 
 export async function getExplorerModel(userId: string, id: string): Promise<ExplorerModel | null> {
+  // Le véhicule de démonstration utilise désormais le modèle de présentation réaliste du catalogue.
+  if (id === DEMO_MODEL_ID) return explorerModelFromCatalog(GENERIC_MODEL);
   const model = await getAccessibleModel(userId, id);
   if (!model) return null;
   return {

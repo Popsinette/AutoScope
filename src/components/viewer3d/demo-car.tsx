@@ -9,8 +9,9 @@
  * données) relie à une fiche composant. Convention : avant du véhicule vers +Z,
  * Y vers le haut, unités en mètres.
  */
-import { forwardRef, useMemo } from "react";
+import { forwardRef, useImperativeHandle, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { DEMO_NODE_MAPPING } from "@/lib/demo-model";
 
 const WHEELS = [
   { id: "FL", x: 0.8, z: 1.4 },
@@ -80,8 +81,23 @@ function useMaterials() {
   );
 }
 
-export const DemoCar = forwardRef<THREE.Group>(function DemoCar(_props, ref) {
+/**
+ * `only` : ne conserve que ces objets (organes illustratifs ajoutés à un modèle GLB
+ * qui n'en possède pas). Les autres sont retirés avant l'inscription dans la scène.
+ */
+export const DemoCar = forwardRef<THREE.Group, { only?: string[] }>(function DemoCar({ only }, ref) {
   const m = useMaterials();
+  const root = useRef<THREE.Group>(null);
+  useImperativeHandle(ref, () => root.current!);
+  useLayoutEffect(() => {
+    if (!only || !root.current) return;
+    const keep = new Set(only);
+    const drop: THREE.Object3D[] = [];
+    root.current.traverse((o) => {
+      if (o.name in DEMO_NODE_MAPPING && !keep.has(o.name)) drop.push(o);
+    });
+    drop.forEach((o) => o.removeFromParent());
+  }, [only]);
   const g = useMemo(() => {
     const doorShape = (sign: 1 | -1) => {
       const x = 0.915 * sign;
@@ -105,7 +121,7 @@ export const DemoCar = forwardRef<THREE.Group>(function DemoCar(_props, ref) {
   }, []);
 
   return (
-    <group ref={ref} name="CarView_Demo">
+    <group ref={root} name="CarView_Demo">
       {/* Carrosserie */}
       <mesh name="Body_Shell" geometry={g.body} material={m.paint} castShadow />
       <mesh name="Body_Roof" material={m.paint} position={[0, 1.32, -0.16]} castShadow>

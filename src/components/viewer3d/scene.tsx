@@ -1,18 +1,22 @@
 "use client";
 
 /**
- * Scène 3D générique : le même contrôleur gère le véhicule de démonstration et
- * les modèles GLB importés. Il s'appuie uniquement sur les noms des objets et la
- * table de correspondance nœud → fiche composant.
+ * Scène 3D générique : le même contrôleur gère les modèles GLB (catalogue ou
+ * import) et le véhicule procédural. Il s'appuie uniquement sur les noms des
+ * objets et la table de correspondance nœud → fiche composant.
  */
-import { CameraControls, Environment, Grid, Lightformer, useGLTF } from "@react-three/drei";
-import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
+import { CameraControls, ContactShadows, Environment, Lightformer, MeshReflectorMaterial, useGLTF } from "@react-three/drei";
+import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
+import CameraControlsImpl from "camera-controls";
 import { forwardRef, Suspense, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { suggestComponentSlug } from "@/lib/gltf";
 import { appearanceFor, explodeDirection, type ViewerMode } from "@/lib/viewer-modes";
 import { DemoCar } from "./demo-car";
 import { ELECTRONIC_COLORS, FAMILY_COLORS, SELECTION_COLOR } from "./palette";
 import type { CameraPreset, ExplorerComponent, ExplorerModel } from "./types";
+
+const ACTION = CameraControlsImpl.ACTION;
 
 export interface SceneProps {
   model: ExplorerModel;
@@ -21,13 +25,30 @@ export interface SceneProps {
   selectedSlug: string | null;
   hiddenFamilies: ReadonlySet<string>;
   explode: number;
+  /** Opacité de la carrosserie translucide (0,04 à 0,6). */
+  ghostOpacity?: number;
+  /** N'afficher que la pièce sélectionnée. */
+  isolate?: boolean;
+  paint?: string | null;
   lowQuality: boolean;
   reducedMotion: boolean;
   camera: { preset: CameraPreset; nonce: number };
   focusNonce: number;
+  zoom?: { direction: 1 | -1; nonce: number };
+  /** Vitrine (page d'accueil) : rotation automatique, pas de zoom, défilement tactile préservé. */
+  showcase?: boolean;
+  autoRotate?: boolean;
   onSelect: (slug: string | null) => void;
   onHover: (slug: string | null) => void;
-  onReady: (info: { mappedNodes: number; hasInterior: boolean; unmappedMeshes: number }) => void;
+  onReady: (info: SceneReadyInfo) => void;
+}
+
+export interface SceneReadyInfo {
+  mappedNodes: number;
+  hasInterior: boolean;
+  unmappedMeshes: number;
+  /** Fiches effectivement présentes dans la scène. */
+  slugs: string[];
 }
 
 interface Part {
@@ -39,66 +60,186 @@ interface Part {
 
 interface MovableNode {
   object: THREE.Object3D;
+  /** Position locale d'origine. */
   base: THREE.Vector3;
-  localDir: THREE.Vector3;
+  /** Position monde d'origine et direction d'éclatement (monde). */
+  baseWorld: THREE.Vector3;
+  worldDir: THREE.Vector3;
+  depth: number;
 }
 
-const UNMAPPED = "NON_ASSOCIE";
+interface Controller {
+  frame: (preset: CameraPreset) => void;
+  focus: (slug: string | null) => void;
+  zoom: (direction: 1 | -1) => void;
+}
 
-function slugFor(object: THREE.Object3D, mapping: Record<string, string>, stop: THREE.Object3D) {
+type PaintSelector = (variant: string) => Promise<void>;
+
+const UNMAPPED = "NON_ASSOCIE";
+const BACKGROUND = "#0c0d10";
+
+// Repères du véhicule procédural (demo-car.tsx), utilisés pour recaler les organes illustratifs.
+const DEMO_FRONT_AXLE = 1.4;
+const DEMO_REAR_AXLE = -1.35;
+const DEMO_TRACK = 0.8;
+const DEMO_WHEEL_Y = 0.34;
+const DEMO_HEIGHT = 1.34;
+/** Étendue longitudinale des organes internes (radiateur à l'avant, silencieux à l'arrière). */
+const DEMO_INTERNALS_LENGTH = 4.3;
+
+function slugFor(object: THREE.Object3D, mapping: Record<string, string>, stop: THREE.Object3D, autoMap: boolean) {
   let current: THREE.Object3D | null = object;
   while (current && current !== stop.parent) {
     if (current.name && mapping[current.name]) return { slug: mapping[current.name], node: current };
+    if (autoMap && current.name) {
+      const guess = suggestComponentSlug(current.name);
+      if (guess) return { slug: guess, node: current };
+    }
     current = current.parent;
   }
   return { slug: null, node: object };
 }
 
-function GlbModel({ url, onLoaded }: { url: string; onLoaded: (root: THREE.Object3D) => void }) {
-  // Draco désactivé : le décodeur serait chargé depuis un CDN externe (voir docs/MODELES_3D.md).
-  const { scene } = useGLTF(url, false);
-  useLayoutEffect(() => onLoaded(scene), [scene, onLoaded]);
-  useEffect(() => () => useGLTF.clear(url), [url]);
-  return <primitive object={scene} />;
+/** Centre des roues avant/arrière d'un modèle (noms « Wheel(Front|Rear)(L|R) »), sinon estimation. */
+function wheelReference(root: THREE.Object3D) {
+  root.updateMatrixWorld(true);
+  const centers = { front: [] as THREE.Vector3[], rear: [] as THREE.Vector3[] };
+  root.traverse((o) => {
+    const m = /^Wheel(Front|Rear)(L|R)$/i.exec(o.name);
+    if (m) centers[m[1].toLowerCase() as "front" | "rear"].push(new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()));
+  });
+  if (centers.front.length && centers.rear.length) {
+    const avg = (list: THREE.Vector3[]) => list.reduce((a, b) => a.add(b), new THREE.Vector3()).divideScalar(list.length);
+    const f = avg(centers.front);
+    const r = avg(centers.rear);
+    const track = centers.front.reduce((m, c) => Math.max(m, Math.abs(c.x)), 0);
+    return { front: f.z, rear: r.z, y: (f.y + r.y) / 2, track };
+  }
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const c = box.getCenter(new THREE.Vector3());
+  return { front: c.z + size.z * 0.31, rear: c.z - size.z * 0.31, y: box.min.y + size.y * 0.25, track: size.x * 0.38 };
 }
 
-const ModelController = forwardRef<{ frame: (preset: CameraPreset) => void; focus: (slug: string | null) => void }, Omit<SceneProps, "camera" | "focusNonce"> & { controls: React.RefObject<CameraControls | null> }>(
+function GlbModel({
+  model,
+  onLoaded,
+}: {
+  model: ExplorerModel;
+  onLoaded: (root: THREE.Object3D, selectPaint: PaintSelector | null, identity: THREE.Object3D) => void;
+}) {
+  const url = model.url!;
+  // Draco désactivé : son décodeur serait chargé depuis un CDN externe. Meshopt est inclus.
+  const gltf = useGLTF(url, false);
+  const wrapper = useRef<THREE.Group>(null);
+  const overlay = useRef<THREE.Group>(null);
+
+  useLayoutEffect(() => {
+    if (!wrapper.current) return;
+    if (overlay.current && model.overlayNodes?.length) {
+      // Recalage des organes illustratifs sur les essieux réels du modèle.
+      const ref = wheelReference(gltf.scene);
+      const body = new THREE.Box3().setFromObject(gltf.scene);
+      const bodySize = body.getSize(new THREE.Vector3());
+      const s = Math.abs(ref.front - ref.rear) / (DEMO_FRONT_AXLE - DEMO_REAR_AXLE);
+      // Les organes doivent rester dans l'enveloppe du modèle (plus bas ou plus court que le véhicule schématique).
+      const sy = Math.min(s, bodySize.y / DEMO_HEIGHT);
+      const sz = Math.min(s, (bodySize.z * 0.9) / DEMO_INTERNALS_LENGTH);
+      const axleMid = (ref.front + ref.rear) / 2;
+      overlay.current.scale.set(ref.track / DEMO_TRACK, sy, sz);
+      overlay.current.position.set(0, ref.y - DEMO_WHEEL_Y * sy, axleMid - ((DEMO_FRONT_AXLE + DEMO_REAR_AXLE) / 2) * sz);
+    }
+    // Parseur de three-stdlib (utilisé par Drei) : API identique à celui de three.js.
+    const parser = gltf.parser as unknown as {
+      getDependency(type: "material", index: number): Promise<THREE.Material>;
+      assignFinalMaterial(mesh: THREE.Mesh): void;
+    };
+    const variantNames: string[] = (gltf.userData?.gltfExtensions?.KHR_materials_variants?.variants ?? []).map((v: { name: string }) => v.name);
+    const selectPaint: PaintSelector | null = variantNames.length
+      ? async (name) => {
+          const index = variantNames.indexOf(name);
+          if (index < 0) return;
+          const meshes: THREE.Mesh[] = [];
+          gltf.scene.traverse((o) => {
+            if ((o as THREE.Mesh).isMesh && o.userData.gltfExtensions?.KHR_materials_variants) meshes.push(o as THREE.Mesh);
+          });
+          await Promise.all(
+            meshes.map(async (mesh) => {
+              mesh.userData.cvPaintOriginal ??= mesh.userData.cvOriginal ?? mesh.material;
+              const mapping = mesh.userData.gltfExtensions.KHR_materials_variants.mappings.find((m: { variants: number[] }) => m.variants.includes(index));
+              if (mapping) {
+                mesh.material = await parser.getDependency("material", mapping.material);
+                parser.assignFinalMaterial(mesh);
+              } else {
+                mesh.material = mesh.userData.cvPaintOriginal;
+              }
+              mesh.userData.cvOriginal = mesh.material;
+            }),
+          );
+        }
+      : null;
+    onLoaded(wrapper.current, selectPaint, gltf.scene);
+  }, [gltf, model.overlayNodes, onLoaded]);
+
+  return (
+    <group ref={wrapper}>
+      <group rotation-y={model.rotationY ?? 0}>
+        <primitive object={gltf.scene} />
+      </group>
+      {model.overlayNodes?.length ? (
+        <group ref={overlay} name="CarView_Illustratif">
+          <DemoCar only={model.overlayNodes} />
+        </group>
+      ) : null}
+    </group>
+  );
+}
+
+const ModelController = forwardRef<Controller, Omit<SceneProps, "camera" | "focusNonce" | "zoom"> & { controls: React.RefObject<CameraControls | null> }>(
   function ModelController(props, ref) {
-    const { model, components, mode, selectedSlug, hiddenFamilies, explode, onSelect, onHover, onReady, controls, reducedMotion } = props;
+    const { model, components, mode, selectedSlug, hiddenFamilies, explode, onSelect, onHover, onReady, controls, reducedMotion, ghostOpacity = 0.12, isolate = false, paint, showcase } = props;
     const invalidate = useThree((s) => s.invalidate);
     const demoRef = useRef<THREE.Group>(null);
     const parts = useRef<Part[]>([]);
     const nodes = useRef<MovableNode[]>([]);
     const bounds = useRef(new THREE.Box3());
     const styleOf = useRef(new Map<THREE.Mesh, string>());
+    const paintSelector = useRef<PaintSelector | null>(null);
 
     const materials = useMemo(() => {
-      const ghost = new THREE.MeshStandardMaterial({ color: "#9aa3ad", transparent: true, opacity: 0.1, depthWrite: false, roughness: 0.2, metalness: 0.1, side: THREE.DoubleSide });
-      const dim = new THREE.MeshStandardMaterial({ color: "#4a4e55", transparent: true, opacity: 0.35, depthWrite: false });
-      const highlight = new THREE.MeshStandardMaterial({ color: SELECTION_COLOR, emissive: SELECTION_COLOR, emissiveIntensity: 0.55, roughness: 0.35 });
-      const family = Object.fromEntries(Object.entries(FAMILY_COLORS).map(([k, c]) => [k, new THREE.MeshStandardMaterial({ color: c, roughness: 0.45, metalness: 0.3 })]));
-      const electronic = Object.fromEntries(Object.entries(ELECTRONIC_COLORS).map(([k, c]) => [k, new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.35, roughness: 0.4 })]));
+      const ghost = new THREE.MeshPhysicalMaterial({ color: "#a9b4c2", transparent: true, opacity: 0.12, depthWrite: false, roughness: 0.15, metalness: 0.2, clearcoat: 1, side: THREE.DoubleSide });
+      const dim = new THREE.MeshStandardMaterial({ color: "#4a4e55", transparent: true, opacity: 0.3, depthWrite: false });
+      const highlight = new THREE.MeshStandardMaterial({ color: SELECTION_COLOR, emissive: SELECTION_COLOR, emissiveIntensity: 0.6, roughness: 0.35 });
+      const family = Object.fromEntries(Object.entries(FAMILY_COLORS).map(([k, c]) => [k, new THREE.MeshStandardMaterial({ color: c, roughness: 0.4, metalness: 0.35 })]));
+      const electronic = Object.fromEntries(Object.entries(ELECTRONIC_COLORS).map(([k, c]) => [k, new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.45, roughness: 0.4 })]));
       return { ghost, dim, highlight, family, electronic };
     }, []);
 
-    // Libération des ressources GPU au démontage.
+    // Au démontage : état d'origine restauré (le modèle reste en cache pour une prochaine visite)
+    // et ressources GPU libérées ; three.js les renverra à la carte graphique si le modèle réapparaît.
     useEffect(
       () => () => {
         const all = [materials.ghost, materials.dim, materials.highlight, ...Object.values(materials.family), ...Object.values(materials.electronic)];
         all.forEach((m) => m.dispose());
+        for (const n of nodes.current) n.object.position.copy(n.base);
         for (const p of parts.current) {
+          p.mesh.material = p.original;
+          p.mesh.visible = true;
           p.mesh.geometry.dispose();
           (Array.isArray(p.original) ? p.original : [p.original]).forEach((m) => m.dispose());
         }
+        registered.current = null;
       },
       [materials],
     );
 
     const registered = useRef<THREE.Object3D | null>(null);
-    const register = (root: THREE.Object3D) => {
-      // Une seule inscription par racine : les matériaux d'origine ne doivent pas être écrasés.
-      if (registered.current === root) return;
-      registered.current = root;
+    const register = (root: THREE.Object3D, selectPaint: PaintSelector | null = null, identity: THREE.Object3D = root) => {
+      // Une seule inscription par modèle chargé : les matériaux d'origine ne doivent pas être écrasés.
+      if (registered.current === identity) return;
+      registered.current = identity;
+      paintSelector.current = selectPaint;
       root.updateMatrixWorld(true);
       const list: Part[] = [];
       const movable = new Map<THREE.Object3D, MovableNode>();
@@ -107,37 +248,53 @@ const ModelController = forwardRef<{ frame: (preset: CameraPreset) => void; focu
       const size = bounds.current.getSize(new THREE.Vector3()).length();
       root.traverse((obj) => {
         if (!(obj instanceof THREE.Mesh)) return;
-        const { slug, node } = slugFor(obj, model.mapping, root);
+        obj.castShadow = true;
+        const { slug, node } = slugFor(obj, model.mapping, root, !!model.autoMap);
         const info = slug ? (components[slug] ?? null) : null;
+        obj.userData.cvOriginal = obj.material;
         list.push({ mesh: obj, slug: info ? slug : null, info, original: obj.material });
         obj.userData.cvSlug = info ? slug : null;
         if (!movable.has(node) && node.parent) {
           const nodeCenter = new THREE.Box3().setFromObject(node).getCenter(new THREE.Vector3());
-          const dir = new THREE.Vector3(...explodeDirection(center.toArray(), nodeCenter.toArray(), info?.family ?? null)).multiplyScalar(size * 0.28);
-          const worldPos = node.getWorldPosition(new THREE.Vector3());
-          const a = node.parent.worldToLocal(worldPos.clone());
-          const b = node.parent.worldToLocal(worldPos.clone().add(dir));
-          movable.set(node, { object: node, base: node.position.clone(), localDir: b.sub(a) });
+          const worldDir = new THREE.Vector3(...explodeDirection(center.toArray(), nodeCenter.toArray(), info?.family ?? null)).multiplyScalar(size * 0.22);
+          let depth = 0;
+          for (let o: THREE.Object3D | null = node.parent; o; o = o.parent) depth++;
+          movable.set(node, { object: node, base: node.position.clone(), baseWorld: node.getWorldPosition(new THREE.Vector3()), worldDir, depth });
         }
       });
       parts.current = list;
-      nodes.current = [...movable.values()];
+      // Parents d'abord : la position des enfants est calculée après le déplacement de leur parent.
+      nodes.current = [...movable.values()].sort((a, b) => a.depth - b.depth);
       const mappedNodes = new Set(list.filter((p) => p.slug).map((p) => p.mesh.uuid)).size;
       onReady({
         mappedNodes,
-        hasInterior: list.some((p) => p.info?.family === "HABITACLE"),
+        hasInterior: list.some((p) => p.info?.slug === "sieges" || p.info?.slug === "volant"),
         unmappedMeshes: list.filter((p) => !p.slug).length,
+        slugs: [...new Set(list.flatMap((p) => (p.slug ? [p.slug] : [])))],
       });
-      apply();
-      frame("reset", false);
+      void applyPaint()
+        .catch((error) => console.error("Teinte indisponible :", error))
+        .then(() => {
+          apply();
+          frame("reset", false);
+        });
+    };
+
+    const applyPaint = async () => {
+      const name = paint ?? model.defaultPaint;
+      if (!paintSelector.current || !name) return;
+      await paintSelector.current(name);
+      for (const p of parts.current) p.original = p.mesh.userData.cvOriginal ?? p.original;
     };
 
     const apply = () => {
+      materials.ghost.opacity = ghostOpacity;
+      const isolating = isolate && !!selectedSlug;
       for (const p of parts.current) {
         const appearance = appearanceFor(mode, p.info);
         const familyKey = p.info?.family ?? UNMAPPED;
         const isSelected = !!selectedSlug && p.slug === selectedSlug;
-        p.mesh.visible = isSelected || (appearance.visible && !hiddenFamilies.has(familyKey));
+        p.mesh.visible = isSelected || (!isolating && appearance.visible && !hiddenFamilies.has(familyKey));
         let style: string = appearance.visible ? appearance.style : "original";
         if (isSelected) style = "highlight";
         styleOf.current.set(p.mesh, style);
@@ -154,17 +311,31 @@ const ModelController = forwardRef<{ frame: (preset: CameraPreset) => void; focu
                     ? materials.electronic[p.info.electronicKind]
                     : p.original;
         p.mesh.renderOrder = style === "ghost" ? 2 : 0;
+        p.mesh.castShadow = style !== "ghost" && style !== "dim";
       }
-      for (const n of nodes.current) n.object.position.copy(n.base).addScaledVector(n.localDir, explode);
+      for (const n of nodes.current) {
+        if (explode === 0) {
+          n.object.position.copy(n.base);
+          continue;
+        }
+        // Cible en coordonnées monde (évite le cumul des déplacements entre parents et enfants).
+        n.object.parent!.updateWorldMatrix(true, false);
+        n.object.position.copy(n.object.parent!.worldToLocal(n.baseWorld.clone().addScaledVector(n.worldDir, explode)));
+      }
       invalidate();
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(apply, [mode, selectedSlug, hiddenFamilies, explode]);
+    useEffect(apply, [mode, selectedSlug, hiddenFamilies, explode, ghostOpacity, isolate]);
+    useEffect(() => {
+      if (!registered.current) return;
+      void applyPaint().then(apply);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [paint]);
 
     const registerRef = useRef(register);
     registerRef.current = register;
-    const onGlbLoaded = useCallback((root: THREE.Object3D) => registerRef.current(root), []);
+    const onGlbLoaded = useCallback((root: THREE.Object3D, selectPaint: PaintSelector | null, identity: THREE.Object3D) => registerRef.current(root, selectPaint, identity), []);
 
     useLayoutEffect(() => {
       if (model.kind === "PROCEDURAL_DEMO" && demoRef.current) register(demoRef.current);
@@ -178,23 +349,23 @@ const ModelController = forwardRef<{ frame: (preset: CameraPreset) => void; focu
       if (box.isEmpty()) return;
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
-      const d = Math.max(size.x, size.z) * 1.45;
+      const d = Math.max(size.x, size.z) * (showcase ? 1.12 : mode === "eclatee" ? 1.75 : 1.4);
       const h = size.y;
-      c.minDistance = 0.05;
-      c.maxDistance = d * 4;
+      const target = center.clone().setY(center.y * (showcase ? 0.8 : 0.9));
+      c.minDistance = showcase ? d * 0.6 : 0.05;
+      c.maxDistance = d * 3;
+      const look = (x: number, y: number, z: number) => void c.setLookAt(x, y, z, target.x, target.y, target.z, transition);
       switch (preset) {
         case "avant":
-          void c.setLookAt(center.x, center.y + h * 0.3, center.z + d, center.x, center.y, center.z, transition);
-          break;
+          return look(center.x, center.y + h * 0.35, center.z + d);
         case "arriere":
-          void c.setLookAt(center.x, center.y + h * 0.3, center.z - d, center.x, center.y, center.z, transition);
-          break;
-        case "profil":
-          void c.setLookAt(center.x + d, center.y + h * 0.15, center.z, center.x, center.y, center.z, transition);
-          break;
+          return look(center.x, center.y + h * 0.35, center.z - d);
+        case "gauche":
+          return look(center.x + d, center.y + h * 0.2, center.z);
+        case "droite":
+          return look(center.x - d, center.y + h * 0.2, center.z);
         case "dessus":
-          void c.setLookAt(center.x, center.y + d * 1.15, center.z + 0.01, center.x, center.y, center.z, transition);
-          break;
+          return look(center.x, center.y + d * 1.2, center.z + 0.01);
         case "interieur": {
           const seats = parts.current.filter((p) => p.info?.slug === "sieges" || p.info?.slug === "volant");
           if (seats.length === 0) return;
@@ -202,13 +373,13 @@ const ModelController = forwardRef<{ frame: (preset: CameraPreset) => void; focu
           seats.forEach((p) => seatBox.expandByObject(p.mesh));
           const wheel = parts.current.find((p) => p.info?.slug === "volant");
           const x = wheel ? new THREE.Box3().setFromObject(wheel.mesh).getCenter(new THREE.Vector3()).x : seatBox.getCenter(new THREE.Vector3()).x;
-          const eyeY = seatBox.max.y + 0.05;
-          const z = seatBox.getCenter(new THREE.Vector3()).z - 0.1;
-          void c.setLookAt(x, eyeY, z, x, eyeY - 0.15, z + 2, transition);
-          break;
+          const eyeY = seatBox.max.y + 0.08;
+          const z = seatBox.getCenter(new THREE.Vector3()).z - 0.15;
+          void c.setLookAt(x, eyeY, z, x, eyeY - 0.12, z + 2, transition);
+          return;
         }
         default:
-          void c.setLookAt(center.x + d * 0.75, center.y + h * 0.9, center.z + d * 0.85, center.x, center.y, center.z, transition);
+          return showcase ? look(center.x + d * 0.78, center.y + h * 0.35, center.z + d * 0.78) : look(center.x + d * 0.75, center.y + h * 0.85, center.z + d * 0.85);
       }
     };
 
@@ -223,6 +394,11 @@ const ModelController = forwardRef<{ frame: (preset: CameraPreset) => void; focu
         // Marge proportionnelle : une petite pièce reste visible dans son contexte.
         const pad = Math.max(0.5, box.getSize(new THREE.Vector3()).length() * 0.6);
         void c.fitToBox(box, !reducedMotion, { paddingTop: pad, paddingBottom: pad, paddingLeft: pad, paddingRight: pad });
+      },
+      zoom: (direction) => {
+        const c = controls.current;
+        if (!c) return;
+        void c.dolly(direction * Math.max(0.4, c.distance * 0.2), !reducedMotion);
       },
     }));
 
@@ -252,37 +428,89 @@ const ModelController = forwardRef<{ frame: (preset: CameraPreset) => void; focu
           onHover(null);
         }}
       >
-        {model.kind === "PROCEDURAL_DEMO" ? <DemoCar ref={demoRef} /> : <GlbModel url={model.url!} onLoaded={onGlbLoaded} />}
+        {model.kind === "PROCEDURAL_DEMO" ? <DemoCar ref={demoRef} /> : <GlbModel model={model} onLoaded={onGlbLoaded} />}
       </group>
     );
   },
 );
 
+/** Studio de présentation : fond sombre, sol réfléchissant, softbox et ombres de contact. */
 function Studio({ lowQuality }: { lowQuality: boolean }) {
   return (
     <>
-      <color attach="background" args={["#0f1013"]} />
-      <hemisphereLight args={["#dfe7f2", "#16171a", 0.8]} />
-      <directionalLight position={[5, 8, 6]} intensity={2.2} />
-      <directionalLight position={[-6, 4, -6]} intensity={1.0} color="#c9d6ff" />
-      <Environment resolution={lowQuality ? 32 : 128} frames={1}>
-        <Lightformer form="rect" intensity={2.5} position={[0, 5, 0]} rotation-x={Math.PI / 2} scale={[10, 4, 1]} />
-        <Lightformer form="rect" intensity={1.2} position={[6, 2, 0]} rotation-y={-Math.PI / 2} scale={[8, 2, 1]} />
-        <Lightformer form="rect" intensity={1.2} position={[-6, 2, 0]} rotation-y={Math.PI / 2} scale={[8, 2, 1]} />
-        <Lightformer form="ring" color="#ff3b2f" intensity={0.25} position={[0, -2, -8]} scale={3} />
+      <color attach="background" args={[BACKGROUND]} />
+      <fog attach="fog" args={[BACKGROUND, 10, 26]} />
+      <ambientLight intensity={0.12} />
+      <directionalLight position={[4, 8, 5]} intensity={1.3} />
+      <directionalLight position={[-6, 3, -6]} intensity={0.6} color="#c9d6ff" />
+      <Environment resolution={lowQuality ? 64 : 256} frames={1} environmentIntensity={1.05}>
+        <Lightformer form="rect" intensity={3.2} position={[0, 6, 0]} rotation-x={Math.PI / 2} scale={[12, 5, 1]} />
+        <Lightformer form="rect" intensity={2.2} position={[-6, 1.6, -1]} rotation-y={Math.PI / 2} scale={[12, 1.1, 1]} />
+        <Lightformer form="rect" intensity={2.2} position={[6, 1.6, 1]} rotation-y={-Math.PI / 2} scale={[12, 1.1, 1]} />
+        <Lightformer form="rect" intensity={1.1} position={[0, 2.2, 8]} scale={[10, 2, 1]} />
+        <Lightformer form="rect" intensity={0.9} position={[0, 2.2, -8]} rotation-y={Math.PI} scale={[10, 2, 1]} />
+        <Lightformer form="ring" color="#ff3b2f" intensity={0.8} position={[-4, 0.8, -9]} scale={3} />
       </Environment>
-      <mesh rotation-x={-Math.PI / 2} position={[0, 0.001, 0]}>
-        <circleGeometry args={[3.4, 48]} />
-        <meshBasicMaterial color="#000000" transparent opacity={0.45} depthWrite={false} />
+      <mesh rotation-x={-Math.PI / 2} position={[0, -0.001, 0]} receiveShadow>
+        <planeGeometry args={[60, 60]} />
+        {lowQuality ? (
+          <meshStandardMaterial color="#0b0c0f" roughness={0.75} metalness={0.2} />
+        ) : (
+          <MeshReflectorMaterial
+            blur={[320, 90]}
+            resolution={512}
+            mixBlur={1}
+            mixStrength={9}
+            roughness={0.9}
+            depthScale={1.1}
+            minDepthThreshold={0.4}
+            maxDepthThreshold={1.3}
+            color="#0d0e12"
+            metalness={0.55}
+            mirror={0.35}
+          />
+        )}
       </mesh>
-      {!lowQuality && <Grid position={[0, 0, 0]} infiniteGrid cellSize={0.5} sectionSize={2.5} cellColor="#1d2025" sectionColor="#2b2f35" fadeDistance={22} fadeStrength={1.5} />}
+      <ContactShadows position={[0, 0.002, 0]} opacity={0.82} scale={12} blur={2.2} far={2.6} resolution={lowQuality ? 256 : 512} color="#000000" />
     </>
   );
 }
 
+/**
+ * Vitrine : rotation au doigt/à la souris uniquement (molette et pincement laissés à la page)
+ * et rotation automatique, suspendue pendant et peu après une interaction.
+ */
+function ShowcaseControls({ controls, autoRotate }: { controls: React.RefObject<CameraControls | null>; autoRotate: boolean }) {
+  const pausedUntil = useRef(0);
+  useEffect(() => {
+    const c = controls.current;
+    if (!c) return;
+    c.mouseButtons.wheel = ACTION.NONE;
+    c.mouseButtons.right = ACTION.NONE;
+    c.mouseButtons.middle = ACTION.NONE;
+    c.touches.two = ACTION.NONE;
+    c.touches.three = ACTION.NONE;
+    c.minPolarAngle = Math.PI * 0.3;
+    c.maxPolarAngle = Math.PI * 0.47;
+    const pause = () => (pausedUntil.current = performance.now() + 5000);
+    c.addEventListener("controlstart", pause);
+    c.addEventListener("control", pause);
+    return () => {
+      c.removeEventListener("controlstart", pause);
+      c.removeEventListener("control", pause);
+    };
+  }, [controls]);
+  useFrame((_, delta) => {
+    if (!autoRotate || performance.now() < pausedUntil.current) return;
+    controls.current?.rotate(delta * 0.18, 0, false);
+  });
+  return null;
+}
+
 export default function Scene(props: SceneProps) {
   const controls = useRef<CameraControls | null>(null);
-  const controller = useRef<{ frame: (preset: CameraPreset) => void; focus: (slug: string | null) => void }>(null);
+  const controller = useRef<Controller>(null);
+  const { showcase = false, autoRotate = false } = props;
 
   useEffect(() => {
     if (props.camera.nonce > 0) controller.current?.frame(props.camera.preset);
@@ -293,15 +521,24 @@ export default function Scene(props: SceneProps) {
     if (props.focusNonce > 0) controller.current?.focus(props.selectedSlug);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.focusNonce]);
+  useEffect(() => {
+    if (props.zoom && props.zoom.nonce > 0) controller.current?.zoom(props.zoom.direction);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.zoom?.nonce]);
 
   return (
     <Canvas
-      frameloop="demand"
-      dpr={props.lowQuality ? [1, 1.25] : [1, 2]}
-      gl={{ antialias: !props.lowQuality, powerPreference: "high-performance", preserveDrawingBuffer: false }}
-      camera={{ position: [6, 3, 7], fov: 38, near: 0.02, far: 200 }}
+      frameloop={showcase && autoRotate && !props.reducedMotion ? "always" : "demand"}
+      dpr={props.lowQuality ? [1, 1.5] : [1, 2]}
+      gl={{ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.08 }}
+      camera={{ position: [6, 2.5, 7], fov: showcase ? 30 : 36, near: 0.02, far: 120 }}
       onPointerMissed={(e) => {
         if (e.type === "click") props.onSelect(null);
+      }}
+      // Sur la vitrine, le défilement vertical de la page reste possible au doigt.
+      style={showcase ? { touchAction: "pan-y" } : undefined}
+      onCreated={({ gl }) => {
+        if (showcase) gl.domElement.style.touchAction = "pan-y";
       }}
       aria-hidden
     >
@@ -309,7 +546,8 @@ export default function Scene(props: SceneProps) {
       <Suspense fallback={null}>
         <ModelController ref={controller} {...props} controls={controls} />
       </Suspense>
-      <CameraControls ref={controls} makeDefault smoothTime={props.reducedMotion ? 0 : 0.25} maxPolarAngle={Math.PI * 0.53} />
+      <CameraControls ref={controls} makeDefault smoothTime={props.reducedMotion ? 0 : 0.35} draggingSmoothTime={0.12} maxPolarAngle={Math.PI * 0.49} />
+      {showcase && <ShowcaseControls controls={controls} autoRotate={autoRotate && !props.reducedMotion} />}
     </Canvas>
   );
 }

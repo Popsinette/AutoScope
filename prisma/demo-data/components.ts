@@ -467,6 +467,28 @@ export const COMPONENTS: ComponentSeed[] = [
     reliability: "GENERIQUE",
   },
   {
+    slug: "garnitures",
+    name: "Garnitures intérieures",
+    family: "HABITACLE",
+    system: "INTERIEUR",
+    function: "Habillent l'habitacle et isolent les occupants du bruit et de la chaleur.",
+    description:
+      "Panneaux de portes, plancher, moquettes, montants et habillages masquent la structure, intègrent l'isolation phonique et thermique et absorbent une partie de l'énergie en cas de choc.",
+    specs: [{ label: "Matériaux courants", value: "Plastiques, textiles, cuir, mousses acoustiques" }],
+    reliability: "GENERIQUE",
+  },
+  {
+    slug: "pedalier",
+    name: "Pédalier",
+    family: "HABITACLE",
+    system: "INTERIEUR",
+    function: "Transmet les commandes du conducteur à l'accélérateur, au frein et à l'embrayage.",
+    description:
+      "La pédale de frein agit sur le maître-cylindre via l'amplificateur ; l'accélérateur est aujourd'hui le plus souvent électronique (capteur de position relié au calculateur moteur).",
+    specs: [{ label: "Pédales", value: "Accélérateur, frein, embrayage (boîte manuelle)" }],
+    reliability: "GENERIQUE",
+  },
+  {
     slug: "volant",
     name: "Volant",
     family: "HABITACLE",
