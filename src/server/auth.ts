@@ -26,7 +26,8 @@ export const auth = betterAuth({
       },
     },
   },
-  rateLimit: { enabled: true, window: 60, max: 30 },
+  // Limitation de débit active par défaut (y compris en développement) ; désactivable pour les tests E2E uniquement.
+  rateLimit: { enabled: process.env.AUTH_RATE_LIMIT !== "off", window: 60, max: 30 },
   // nextCookies doit rester le dernier plugin (pose les cookies depuis les server actions).
   plugins: [nextCookies()],
 });

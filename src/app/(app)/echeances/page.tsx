@@ -4,7 +4,8 @@ import { deleteReminderAction, toggleReminderAction } from "@/app/actions/remind
 import { ReminderForm } from "@/components/reminders/reminder-form";
 import { ReminderStatusBadge } from "@/components/reminders/status-badge";
 import { Badge, DemoBadge } from "@/components/ui/badge";
-import { Button, ButtonLink } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { ConfirmAction } from "@/components/ui/confirm-action";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -133,18 +134,18 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
                         <form action={toggleReminderAction}>
                           <input type="hidden" name="id" value={r.id} />
                           <input type="hidden" name="completed" value="1" />
-                          <Button type="submit" variant="ghost" size="sm">
+                          <SubmitButton variant="ghost" size="sm" pendingLabel="…">
                             Marquer réalisée
-                          </Button>
+                          </SubmitButton>
                         </form>
                       </>
                     ) : (
                       <form action={toggleReminderAction}>
                         <input type="hidden" name="id" value={r.id} />
                         <input type="hidden" name="completed" value="0" />
-                        <Button type="submit" variant="ghost" size="sm">
+                        <SubmitButton variant="ghost" size="sm" pendingLabel="…">
                           <RotateCcw size={14} aria-hidden /> Rouvrir
-                        </Button>
+                        </SubmitButton>
                       </form>
                     )}
                     <ButtonLink href={`/echeances/${r.id}/modifier`} variant="ghost" size="sm">
