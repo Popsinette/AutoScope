@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --color-bg: #0e0f11;
+  --color-surface: #16181b;
+  --color-surface-2: #1d2024;
+  --color-surface-3: #262a2f;
+  --color-line: #2c3036;
+  --color-line-strong: #3a3f46;
+  --color-ink: #eceef0;
+  --color-ink-2: #b9bdc4;
+  --color-muted: #9198a1;
+  --color-accent: #d9261c;
+  --color-accent-hover: #ef3a2f;
+  --color-accent-ink: #ff6a5f;
+  --color-accent-soft: #3a1513;
+  --color-ok: #34b36f;
+  --color-warn: #e6a23c;
+  --color-info: #4f92e3;
+  --color-danger: #ff5a4f;
+
+  --radius-card: 14px;
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 12px 30px -18px rgb(0 0 0 / 0.8);
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background:
+      radial-gradient(1200px 500px at 70% -10%, rgb(217 38 28 / 0.07), transparent 60%),
+      var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    min-height: 100dvh;
+    font-feature-settings: "cv11", "ss01";
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent-ink);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: rgb(217 38 28 / 0.5);
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.8);
+  }
+  dialog::backdrop {
+    background: rgb(0 0 0 / 0.65);
+    backdrop-filter: blur(2px);
+  }
+}
+
+@layer components {
+  .card {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.015), transparent 40%), var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+  .field {
+    width: 100%;
+    background: var(--color-bg);
+    border: 1px solid var(--color-line-strong);
+    border-radius: 9px;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.9rem;
+    color: var(--color-ink);
+    transition: border-color 120ms;
+  }
+  .field:hover {
+    border-color: #4a5058;
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgb(217 38 28 / 0.25);
+  }
+  .field[aria-invalid="true"] {
+    border-color: var(--color-danger);
+  }
+  .eyebrow {
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

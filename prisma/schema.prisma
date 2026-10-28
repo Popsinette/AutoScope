@@ -1,0 +1,447 @@
+// Schéma de données CarView.
+// Toutes les ressources métier sont rattachées (directement ou via le véhicule)
+// à un utilisateur ; les contrôles d'accès se font côté serveur dans src/server.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Authentification (tables attendues par Better Auth)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  vehicles  Vehicle[]
+  documents Document[]
+  models3d  Model3D[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// Garage
+// ---------------------------------------------------------------------------
+
+enum Energy {
+  ESSENCE
+  DIESEL
+  HYBRIDE
+  HYBRIDE_RECHARGEABLE
+  ELECTRIQUE
+  GPL
+  AUTRE
+}
+
+enum Transmission {
+  MANUELLE
+  AUTOMATIQUE
+  DOUBLE_EMBRAYAGE
+  CVT
+  AUTRE
+}
+
+model Vehicle {
+  id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  make         String
+  model        String
+  trim         String?
+  year         Int
+  engine       String?
+  energy       Energy
+  transmission Transmission
+  mileage      Int
+  acquiredAt   DateTime?
+  photoKey     String?
+  photoMime    String?
+  // Données privées : jamais exposées hors du propriétaire.
+  registration String?
+  vin          String?
+  notes        String?
+  // Jeu de démonstration explicitement identifié.
+  isDemo       Boolean      @default(false)
+  model3dId    String?
+  model3d      Model3D?     @relation(fields: [model3dId], references: [id], onDelete: SetNull)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  interventions Intervention[]
+  expenses      Expense[]
+  reminders     Reminder[]
+  documents     Document[]
+
+  @@index([userId])
+  @@map("vehicle")
+}
+
+// ---------------------------------------------------------------------------
+// 3D : modèles, composants pédagogiques et correspondances
+// ---------------------------------------------------------------------------
+
+enum Model3DKind {
+  PROCEDURAL_DEMO // véhicule générique construit en code (src/components/viewer3d/demo-car)
+  GLB             // fichier GLB/glTF importé par l'utilisateur
+}
+
+model Model3D {
+  id           String             @id @default(cuid())
+  // null = modèle intégré disponible pour tous (démonstration)
+  userId       String?
+  user         User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  kind         Model3DKind
+  storageKey   String?
+  fileSize     Int?
+  source       String
+  license      String
+  isIllustrative Boolean          @default(true)
+  // Liste des noms de nœuds trouvés dans le fichier, pour l'écran de correspondance.
+  nodeNames    String[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  mappings     ComponentMapping[]
+  vehicles     Vehicle[]
+
+  @@index([userId])
+  @@map("model3d")
+}
+
+enum ComponentFamily {
+  CARROSSERIE
+  MOTEUR
+  TRANSMISSION
+  FREINAGE
+  SUSPENSION
+  DIRECTION
+  REFROIDISSEMENT
+  ECHAPPEMENT
+  ROUES
+  ELECTRONIQUE
+  HABITACLE
+}
+
+enum ComponentSystem {
+  EXTERIEUR
+  MECANIQUE
+  ELECTRONIQUE
+  INTERIEUR
+}
+
+// Sous-catégorie électronique pour la légende (calculateurs, capteurs…).
+enum ElectronicKind {
+  CALCULATEUR
+  FAISCEAU
+  CAPTEUR
+  ACTIONNEUR
+  BATTERIE
+}
+
+enum InfoReliability {
+  DOCUMENTEE   // source précise citée
+  GENERIQUE    // connaissance générale, valable pour la plupart des véhicules
+  ILLUSTRATIVE // donnée de démonstration
+}
+
+model Component {
+  id             String           @id @default(cuid())
+  slug           String           @unique
+  name           String
+  family         ComponentFamily
+  system         ComponentSystem
+  electronicKind ElectronicKind?
+  function       String
+  description    String
+  specs          Json             @default("[]") // [{label, value}]
+  reference      String?
+  source         String
+  reliability    InfoReliability
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  mappings      ComponentMapping[]
+  interventions InterventionComponent[]
+  documents     Document[]
+
+  @@map("component")
+}
+
+model ComponentMapping {
+  id          String    @id @default(cuid())
+  model3dId   String
+  model3d     Model3D   @relation(fields: [model3dId], references: [id], onDelete: Cascade)
+  nodeName    String
+  componentId String
+  component   Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@unique([model3dId, nodeName])
+  @@map("component_mapping")
+}
+
+// ---------------------------------------------------------------------------
+// Entretien
+// ---------------------------------------------------------------------------
+
+enum InterventionCategory {
+  VIDANGE
+  REVISION
+  FREINAGE
+  PNEUS
+  BATTERIE
+  CONTROLE_TECHNIQUE
+  REPARATION
+  AUTRE
+}
+
+model Intervention {
+  id             String               @id @default(cuid())
+  vehicleId      String
+  vehicle        Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  date           DateTime
+  mileage        Int
+  category       InterventionCategory
+  description    String
+  garage         String?
+  // Montants en centimes d'euro.
+  partsCostCents Int                  @default(0)
+  laborCostCents Int                  @default(0)
+  nextDueDate    DateTime?
+  nextDueMileage Int?
+  notes          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  replacedParts ReplacedPart[]
+  components    InterventionComponent[]
+  documents     Document[]
+  // Dépense unique dérivée des coûts : jamais saisie une seconde fois.
+  expense       Expense?
+  // Échéance créée à partir de « prochaine échéance ».
+  followUpReminder Reminder?           @relation("ReminderSource")
+  completedReminders Reminder[]        @relation("ReminderCompletion")
+
+  @@index([vehicleId, date])
+  @@map("intervention")
+}
+
+model ReplacedPart {
+  id             String       @id @default(cuid())
+  interventionId String
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  name           String
+  reference      String?
+  quantity       Int          @default(1)
+
+  @@map("replaced_part")
+}
+
+model InterventionComponent {
+  interventionId String
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  componentId    String
+  component      Component    @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@id([interventionId, componentId])
+  @@map("intervention_component")
+}
+
+// ---------------------------------------------------------------------------
+// Dépenses
+// ---------------------------------------------------------------------------
+
+enum ExpenseCategory {
+  ENTRETIEN
+  REPARATION
+  PIECES
+  PNEUMATIQUES
+  CARBURANT
+  ASSURANCE
+  AUTRE
+}
+
+model Expense {
+  id             String          @id @default(cuid())
+  vehicleId      String
+  vehicle        Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  date           DateTime
+  category       ExpenseCategory
+  amountCents    Int
+  label          String
+  notes          String?
+  // Renseigné quand la dépense découle d'une intervention : elle est alors
+  // recalculée à chaque modification de l'intervention (pas de double comptage).
+  interventionId String?         @unique
+  intervention   Intervention?   @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([vehicleId, date])
+  @@map("expense")
+}
+
+// ---------------------------------------------------------------------------
+// Échéances
+// ---------------------------------------------------------------------------
+
+enum ReminderOrigin {
+  UTILISATEUR            // saisie par l'utilisateur
+  CONSTRUCTEUR_DOCUMENTE // préconisation constructeur avec source obligatoire
+}
+
+model Reminder {
+  id                String               @id @default(cuid())
+  vehicleId         String
+  vehicle           Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  title             String
+  category          InterventionCategory
+  dueDate           DateTime?
+  dueMileage        Int?
+  origin            ReminderOrigin       @default(UTILISATEUR)
+  sourceReference   String?
+  notes             String?
+  completedAt       DateTime?
+  completedById     String?
+  completedBy       Intervention?        @relation("ReminderCompletion", fields: [completedById], references: [id], onDelete: SetNull)
+  sourceInterventionId String?           @unique
+  sourceIntervention Intervention?       @relation("ReminderSource", fields: [sourceInterventionId], references: [id], onDelete: Cascade)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([vehicleId])
+  @@map("reminder")
+}
+
+// ---------------------------------------------------------------------------
+// Documents
+// ---------------------------------------------------------------------------
+
+enum DocumentCategory {
+  FACTURE
+  PHOTO
+  NOTICE
+  CONTROLE_TECHNIQUE
+  ASSURANCE
+  CARTE_GRISE
+  AUTRE
+}
+
+model Document {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicleId      String
+  vehicle        Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  interventionId String?
+  intervention   Intervention?    @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+  componentId    String?
+  component      Component?       @relation(fields: [componentId], references: [id], onDelete: SetNull)
+  category       DocumentCategory
+  title          String
+  fileName       String
+  mimeType       String
+  size           Int
+  storageKey     String           @unique
+  createdAt      DateTime         @default(now())
+
+  @@index([userId])
+  @@index([vehicleId])
+  @@map("document")
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue de pièces
+// ---------------------------------------------------------------------------
+
+model CatalogPart {
+  id            String              @id @default(cuid())
+  name          String
+  family        ComponentFamily
+  description   String
+  brand         String?
+  reference     String?
+  // Lien optionnel vers la fiche pédagogique du composant.
+  componentSlug String?
+  source        String
+  isDemo        Boolean             @default(true)
+  compatibility PartCompatibility[]
+
+  @@map("catalog_part")
+}
+
+// Compatibilité explicite uniquement : sans ligne correspondante, l'interface
+// affiche « compatibilité à vérifier ».
+model PartCompatibility {
+  id       String      @id @default(cuid())
+  partId   String
+  part     CatalogPart @relation(fields: [partId], references: [id], onDelete: Cascade)
+  make     String
+  model    String
+  yearFrom Int?
+  yearTo   Int?
+  source   String
+
+  @@index([make, model])
+  @@map("part_compatibility")
+}
