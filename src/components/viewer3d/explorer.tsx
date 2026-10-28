@@ -98,9 +98,11 @@ export function Explorer({
   const [webgl, setWebgl] = useState<boolean | null>(null);
   const [query, setQuery] = useState("");
   const [treeOpen, setTreeOpen] = useState(false);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
   const lowQuality = useMediaQuery("(max-width: 768px), (pointer: coarse)");
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const animation = useRef<number | null>(null);
+  const sceneRef = useRef<HTMLElement>(null);
 
   useEffect(() => setWebgl(webglAvailable()), []);
   useEffect(() => () => {
@@ -115,6 +117,7 @@ export function Explorer({
   const select = useCallback(
     (slug: string | null, fromList = false) => {
       setSelected(slug);
+      setSheetExpanded(false);
       if (slug && fromList) {
         const info = bySlug[slug];
         if (info) setMode((m) => modeToReveal(m, info));
@@ -125,9 +128,13 @@ export function Explorer({
           return next;
         });
         setFocusNonce((n) => n + 1);
+        // Sur petit écran, ramener la scène en vue au-dessus du tiroir de la fiche.
+        if (window.matchMedia("(max-width: 1279px)").matches) {
+          sceneRef.current?.scrollIntoView({ block: "start", behavior: reducedMotion ? "auto" : "smooth" });
+        }
       }
     },
-    [bySlug],
+    [bySlug, reducedMotion],
   );
 
   // Sélection initiale (lien depuis une intervention) : rendre visible puis cadrer.
@@ -263,7 +270,7 @@ export function Explorer({
         {tree}
       </aside>
 
-      <section className="card relative flex min-h-0 flex-col overflow-hidden" aria-label="Scène 3D">
+      <section ref={sceneRef} className="card relative flex min-h-0 scroll-mt-16 flex-col overflow-hidden" aria-label="Scène 3D">
         <div className="flex items-center gap-2 border-b border-line p-2">
           <div role="toolbar" aria-label="Modes d’affichage" className="-mx-1 flex flex-1 gap-1 overflow-x-auto px-1 lg:flex-wrap">
             {MODES.map((m) => {
@@ -291,7 +298,7 @@ export function Explorer({
           </button>
         </div>
 
-        <div className="relative h-[52dvh] min-h-[340px] bg-[#0f1013] lg:h-[calc(100dvh-262px)] lg:min-h-[470px]" data-testid="scene-container" data-selected={selected ?? ""} data-mode={mode} data-ready={ready ? "1" : "0"}>
+        <div className="relative h-[46dvh] min-h-[300px] bg-[#0f1013] lg:h-[calc(100dvh-262px)] lg:min-h-[470px]" data-testid="scene-container" data-selected={selected ?? ""} data-mode={mode} data-ready={ready ? "1" : "0"}>
           {webgl === false ? (
             <NoWebgl />
           ) : webgl === null ? (
@@ -366,16 +373,31 @@ export function Explorer({
         </p>
       </section>
 
-      {/* Fiche : colonne sur grand écran, tiroir inférieur sur mobile/tablette */}
+      {/* Fiche : colonne sur grand écran, tiroir inférieur repliable sur mobile/tablette */}
       <aside
         aria-labelledby={selected ? "component-sheet-title" : undefined}
         aria-label={selected ? undefined : "Fiche composant"}
         className={cn(
-          "card overflow-y-auto",
-          "xl:static xl:block xl:max-h-[calc(100dvh-210px)]",
-          selected ? "fixed inset-x-0 bottom-16 z-40 max-h-[62dvh] rounded-b-none border-b-0 shadow-2xl lg:bottom-0 xl:rounded-b-[14px] xl:border-b xl:shadow-none" : "hidden xl:block",
+          "card xl:static xl:block xl:max-h-[calc(100dvh-210px)] xl:overflow-y-auto",
+          selected
+            ? cn(
+                "fixed inset-x-0 bottom-16 z-40 rounded-b-none border-b-0 shadow-2xl lg:bottom-0 xl:rounded-b-[14px] xl:border-b xl:shadow-none",
+                sheetExpanded ? "max-h-[72dvh] overflow-y-auto" : "max-h-[118px] overflow-hidden xl:max-h-none",
+              )
+            : "hidden xl:block",
         )}
       >
+        {selected && (
+          <button
+            type="button"
+            onClick={() => setSheetExpanded((e) => !e)}
+            aria-expanded={sheetExpanded}
+            className="flex w-full items-center justify-center gap-2 pt-2 text-[0.7rem] text-muted xl:hidden"
+          >
+            <span className="h-1 w-10 rounded-full bg-line-strong" aria-hidden />
+            <span className="sr-only">{sheetExpanded ? "Réduire la fiche" : "Afficher toute la fiche"}</span>
+          </button>
+        )}
         {selected ? (
           <ComponentSheet key={selected} slug={selected} vehicleId={vehicleId} illustrative={model.isIllustrative} onClose={() => setSelected(null)} />
         ) : (
@@ -383,6 +405,11 @@ export function Explorer({
             <p className="font-medium text-ink">Sélectionnez une pièce</p>
             <p className="mt-1">Cliquez sur une pièce dans la scène ou dans la liste pour voir sa fonction, sa description, ses interventions et ses documents.</p>
           </div>
+        )}
+        {selected && !sheetExpanded && (
+          <button type="button" onClick={() => setSheetExpanded(true)} className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface to-transparent text-[0.72rem] text-ink-2 xl:hidden">
+            Voir la fiche complète
+          </button>
         )}
       </aside>
 

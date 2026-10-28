@@ -31,6 +31,7 @@ test("@mobile scène 3D de démonstration : sélection d'une pièce et fiche", a
   await expect(scene).toHaveAttribute("data-selected", "calculateur-moteur");
   await expect(scene).toHaveAttribute("data-mode", "electronique");
   await expect(page.getByRole("heading", { name: "Calculateur moteur (ECU)" })).toBeVisible();
+  if (isMobile) await page.getByRole("button", { name: "Voir la fiche complète" }).click();
   await expect(page.getByText("Pilote l’injection").or(page.getByText("Pilote l'injection"))).toBeVisible();
   await expect(page.getByText("Source et fiabilité")).toBeVisible();
   await expect(page.getByText("Générique", { exact: true })).toBeVisible();

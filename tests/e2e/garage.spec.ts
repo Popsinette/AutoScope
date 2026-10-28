@@ -40,3 +40,23 @@ test("déconnexion puis reconnexion", async ({ page }) => {
   await page.getByRole("button", { name: "Se connecter" }).click();
   await expect(page).toHaveURL(/tableau-de-bord/);
 });
+
+test("export puis suppression du compte et de ses fichiers", async ({ page }) => {
+  const email = await signUp(page);
+  const vehicleId = await addVehicle(page, "Mazda", "MX-5", "80000");
+  const exported = await (await page.request.get("/api/compte/export")).json();
+  expect(exported.user.email).toBe(email);
+  expect(exported.vehicles.map((v: { id: string }) => v.id)).toEqual([vehicleId]);
+
+  await page.goto("/parametres");
+  await page.getByRole("button", { name: "Supprimer mon compte" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel(/Saisissez/).fill(email);
+  await dialog.getByLabel("Mot de passe").fill("motdepasse-e2e-solide");
+  await dialog.getByRole("button", { name: "Supprimer définitivement" }).click();
+  await expect(page).toHaveURL(/connexion/);
+  await page.getByLabel("E-mail").fill(email);
+  await page.getByLabel("Mot de passe").fill("motdepasse-e2e-solide");
+  await page.getByRole("button", { name: "Se connecter" }).click();
+  await expect(page.getByText("E-mail ou mot de passe incorrect.")).toBeVisible();
+});
