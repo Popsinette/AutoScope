@@ -4,7 +4,7 @@
 
 - `npm run typecheck` : aucune erreur.
 - `npm run build` : build de production réussi (33 routes).
-- `npm test` (Vitest 5, base PostgreSQL `carview_test`) : **6 fichiers, 33 tests réussis**.
+- `npm test` (Vitest 5, base PostgreSQL `carview_test`) : **7 fichiers, 38 tests réussis** (dont 5 sur le stockage de la démo hors ligne : jeu préchargé, une dépense par intervention, échéances, relecture des données, cascades, import GLB).
   - `tests/unit/reminders.test.ts` : statuts date/km, double seuil (signalé dès qu’un seuil est atteint), tri, libellés.
   - `tests/unit/expenses.test.ts` : catégories dérivées, totaux, répartition, mois, CSV, saisie des montants.
   - `tests/unit/files.test.ts` : détection par signature, fichier déguisé/vide/trop gros refusé, noms nettoyés.
@@ -22,6 +22,8 @@
   - Isolation : un second utilisateur reçoit 404 sur véhicule, document, photo, export CSV ; son export ne contient rien de l’autre.
   - Export JSON puis suppression du compte (connexion ensuite refusée).
 
+- `npx playwright test -c playwright.demo.config.ts` (démo compilée servie sous `/AutoScope/`) : **8 tests réussis** (4 desktop, 4 mobile) — jeu préchargé, véhicule conservé après rechargement, entretien avec facture et dépense recalculée, sélection 3D et vue éclatée, réinitialisation.
+
 Note : pour les E2E, la limitation de débit de Better Auth est désactivée par `AUTH_RATE_LIMIT=off` (inscriptions rapides successives) ; elle est active partout ailleurs.
 
 ## Ce qui fonctionne
@@ -37,6 +39,10 @@ Note : pour les E2E, la limitation de débit de Better Auth est désactivée par
 - Import GLB avec vérification, provenance/licence, table de correspondance éditable.
 - Catalogue : familles, recherche, « compatibilité à vérifier » sauf donnée explicite.
 - Interface responsive : barre latérale sur ordinateur, navigation inférieure et tiroirs sur mobile ; états de chargement, d’erreur, vides et confirmations.
+
+## Démo hors ligne (GitHub Pages)
+
+Application Vite sans serveur qui réutilise les vues de l’application ; données dans le navigateur (localStorage + IndexedDB), aucun compte, aucune synchronisation. Publiée par `.github/workflows/deploy-demo.yml` après typecheck, tests Vitest (avec PostgreSQL de CI) et build.
 
 ## Ce qui est simulé ou illustratif
 

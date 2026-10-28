@@ -129,7 +129,7 @@ export function InterventionsView({
           ))}
         </ol>
       ) : (
-        <div className="card overflow-x-auto">
+        <div className="card relative overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <caption className="sr-only">Interventions de {vehicleLabel(vehicle)}</caption>
             <thead className="border-b border-line text-left text-xs text-muted">

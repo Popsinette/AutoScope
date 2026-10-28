@@ -20,6 +20,8 @@ import { expenseCategoryFor } from "../src/lib/expenses";
 import { INTERVENTION_LABELS } from "../src/lib/labels";
 import { COMPONENTS, COMPONENT_SOURCE } from "./demo-data/components";
 import { makeDemoPdf } from "./demo-data/pdf";
+import { CATALOG, CATALOG_COMPAT_SOURCE, CATALOG_SOURCE } from "./demo-data/catalog";
+import { DEMO_GARAGE, invoiceLines, type DemoIntervention } from "./demo-data/garage";
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
 const storage = new LocalFileStorage(process.env.STORAGE_DIR || "./storage");
@@ -70,41 +72,16 @@ async function seedDemoModel(componentIds: Map<string, string>) {
 
 async function seedCatalog() {
   await prisma.catalogPart.deleteMany({ where: { isDemo: true } });
-  const source = "Catalogue de démonstration CarView — références génériques, non commerciales.";
-  const parts: { name: string; family: string; description: string; componentSlug?: string; compat?: boolean }[] = [
-    { name: "Filtre à huile (générique)", family: "MOTEUR", description: "Retient les particules en suspension dans l'huile moteur. Se remplace à chaque vidange.", componentSlug: "bloc-moteur", compat: true },
-    { name: "Filtre à air (générique)", family: "MOTEUR", description: "Filtre l'air admis par le moteur.", componentSlug: "admission", compat: true },
-    { name: "Bougies d'allumage (jeu)", family: "MOTEUR", description: "Produisent l'étincelle qui enflamme le mélange sur un moteur essence." },
-    { name: "Kit d'embrayage", family: "TRANSMISSION", description: "Disque, mécanisme et butée d'embrayage pour boîte manuelle." },
-    { name: "Huile de boîte de vitesses", family: "TRANSMISSION", description: "Lubrifiant spécifique à la boîte ; la norme exacte dépend du constructeur.", componentSlug: "boite-de-vitesses" },
-    { name: "Plaquettes de frein avant", family: "FREINAGE", description: "Garnitures de friction pour étriers avant.", componentSlug: "etriers-frein", compat: true },
-    { name: "Disques de frein avant (paire)", family: "FREINAGE", description: "Disques ventilés à remplacer par paire.", componentSlug: "disques-frein", compat: true },
-    { name: "Liquide de frein DOT 4", family: "FREINAGE", description: "Liquide hygroscopique à renouveler périodiquement." },
-    { name: "Amortisseurs avant (paire)", family: "SUSPENSION", description: "Amortisseurs hydrauliques à remplacer par essieu.", componentSlug: "amortisseurs" },
-    { name: "Rotule de direction", family: "DIRECTION", description: "Articulation entre biellette et porte-moyeu.", componentSlug: "cremaillere" },
-    { name: "Liquide de refroidissement", family: "REFROIDISSEMENT", description: "Mélange antigel ; respecter le type préconisé par le constructeur.", componentSlug: "radiateur" },
-    { name: "Thermostat", family: "REFROIDISSEMENT", description: "Régule la température de fonctionnement du moteur." },
-    { name: "Silencieux arrière", family: "ECHAPPEMENT", description: "Élément terminal de la ligne d'échappement.", componentSlug: "silencieux" },
-    { name: "Batterie 12 V AGM", family: "ELECTRONIQUE", description: "Batterie adaptée aux véhicules équipés du Stop & Start.", componentSlug: "batterie", compat: true },
-    { name: "Sonde lambda amont", family: "ELECTRONIQUE", description: "Capteur d'oxygène placé avant le catalyseur.", componentSlug: "sonde-lambda" },
-    { name: "Ampoule de phare H7", family: "CARROSSERIE", description: "Ampoule halogène courante pour feux de croisement.", componentSlug: "optiques-avant" },
-    { name: "Balais d'essuie-glace (paire)", family: "CARROSSERIE", description: "À remplacer en cas de traces ou de broutement." },
-    { name: "Pneumatique été 225/45 R17", family: "ROUES", description: "Dimension courante sur les compactes et berlines.", componentSlug: "pneumatiques" },
-    { name: "Filtre d'habitacle", family: "HABITACLE", description: "Filtre l'air entrant dans l'habitacle (pollens, particules)." },
-  ];
-  for (const p of parts) {
+  for (const p of CATALOG) {
     await prisma.catalogPart.create({
       data: {
         name: p.name,
-        family: p.family as never,
+        family: p.family,
         description: p.description,
         componentSlug: p.componentSlug ?? null,
-        source,
+        source: CATALOG_SOURCE,
         isDemo: true,
-        // Compatibilité explicite uniquement avec le véhicule générique de démonstration (fictif).
-        compatibility: p.compat
-          ? { create: { make: "CarView", model: "Berline générique", source: "Donnée fictive de démonstration" } }
-          : undefined,
+        compatibility: p.compat ? { create: { make: "CarView", model: "Berline générique", source: CATALOG_COMPAT_SOURCE } } : undefined,
       },
     });
   }
@@ -129,21 +106,6 @@ async function resetDemoUser() {
     },
   });
   return userId;
-}
-
-interface DemoIntervention {
-  date: string;
-  mileage: number;
-  category: InterventionCategory;
-  description: string;
-  garage: string;
-  parts: number;
-  labor: number;
-  replaced?: { name: string; reference?: string; quantity?: number }[];
-  components?: string[];
-  invoice?: boolean;
-  nextDueDate?: string;
-  nextDueMileage?: number;
 }
 
 async function addInterventions(userId: string, vehicleId: string, label: string, items: DemoIntervention[], componentIds: Map<string, string>) {
@@ -192,15 +154,7 @@ async function addInterventions(userId: string, vehicleId: string, label: string
     }
     if (it.invoice) {
       const key = `${userId}/documents/${randomUUID()}`;
-      const pdf = makeDemoPdf([
-        "FACTURE DE DEMONSTRATION - DOCUMENT FICTIF",
-        `Vehicule : ${label}`,
-        `Intervention : ${it.description}`,
-        `Date : ${it.date} - Kilometrage : ${it.mileage} km`,
-        `Intervenant : ${it.garage}`,
-        `Pieces : ${it.parts} EUR - Main-d'oeuvre : ${it.labor} EUR`,
-        "Genere automatiquement par le jeu de demonstration CarView.",
-      ]);
+      const pdf = makeDemoPdf(invoiceLines(label, it));
       await storage.put(key, pdf, "application/pdf");
       await prisma.document.create({
         data: {
@@ -220,114 +174,28 @@ async function addInterventions(userId: string, vehicleId: string, label: string
 }
 
 async function seedDemoGarage(userId: string, componentIds: Map<string, string>) {
-  const gt3 = await prisma.vehicle.create({
-    data: {
-      userId,
-      make: "Porsche",
-      model: "911 GT3",
-      trim: "(992)",
-      year: 2023,
-      engine: "6 cylindres à plat atmosphérique 4,0 L",
-      energy: "ESSENCE",
-      transmission: "DOUBLE_EMBRAYAGE",
-      mileage: 12450,
-      acquiredAt: d("2023-03-15"),
-      registration: "AA-123-AA",
-      notes: "Véhicule de démonstration : données fictives.",
-      isDemo: true,
-    },
-  });
-  await addInterventions(
-    userId,
-    gt3.id,
-    "Porsche 911 GT3 (992)",
-    [
-      { date: "2024-03-12", mileage: 6450, category: "REVISION", description: "Révision annuelle", garage: "Garage partenaire (fictif)", parts: 180, labor: 170, invoice: true, components: ["bloc-moteur", "admission"], replaced: [{ name: "Filtre à huile" }, { name: "Huile moteur", quantity: 9 }] },
-      { date: "2024-09-18", mileage: 8320, category: "FREINAGE", description: "Remplacement plaquettes avant", garage: "Garage partenaire (fictif)", parts: 460, labor: 160, invoice: true, components: ["etriers-frein"], replaced: [{ name: "Plaquettes de frein avant", quantity: 1 }] },
-      { date: "2025-02-10", mileage: 9800, category: "PNEUS", description: "Changement pneus (×4)", garage: "Centre pneus (fictif)", parts: 1760, labor: 120, components: ["pneumatiques"] },
-      { date: "2025-11-14", mileage: 11200, category: "VIDANGE", description: "Vidange moteur", garage: "Garage partenaire (fictif)", parts: 210, labor: 90, components: ["bloc-moteur"], invoice: true, nextDueDate: "2026-11-14", nextDueMileage: 16200 },
-      { date: "2026-04-22", mileage: 12100, category: "REPARATION", description: "Remplacement capteur de vitesse de roue AR gauche", garage: "Garage partenaire (fictif)", parts: 140, labor: 95, components: ["capteurs-vitesse-roue"] },
-    ],
-    componentIds,
-  );
-  await prisma.reminder.createMany({
-    data: [
-      { vehicleId: gt3.id, title: "Remplacer les pneus avant", category: "PNEUS", dueMileage: 13000, notes: "Usure constatée lors de la dernière vidange (démo)." },
-      { vehicleId: gt3.id, title: "Liquide de frein", category: "FREINAGE", dueDate: d("2026-10-01"), notes: "Échéance personnelle (démo)." },
-    ],
-  });
-  await prisma.expense.createMany({
-    data: [
-      { vehicleId: gt3.id, date: d("2026-01-05"), category: "ASSURANCE", amountCents: 186000, label: "Assurance annuelle (démo)" },
-      { vehicleId: gt3.id, date: d("2026-02-14"), category: "CARBURANT", amountCents: 14250, label: "Plein SP98 (démo)" },
-      { vehicleId: gt3.id, date: d("2026-05-30"), category: "CARBURANT", amountCents: 13890, label: "Plein SP98 (démo)" },
-      { vehicleId: gt3.id, date: d("2026-07-12"), category: "PIECES", amountCents: 8900, label: "Kit de nettoyage carrosserie (démo)" },
-      { vehicleId: gt3.id, date: d("2026-08-03"), category: "CARBURANT", amountCents: 15120, label: "Plein SP98 (démo)" },
-    ],
-  });
-
-  const m3 = await prisma.vehicle.create({
-    data: {
-      userId,
-      make: "BMW",
-      model: "M3",
-      trim: "(E92)",
-      year: 2008,
-      engine: "V8 atmosphérique 4,0 L",
-      energy: "ESSENCE",
-      transmission: "MANUELLE",
-      mileage: 85230,
-      acquiredAt: d("2019-06-01"),
-      isDemo: true,
-      notes: "Véhicule de démonstration : données fictives.",
-    },
-  });
-  await addInterventions(
-    userId,
-    m3.id,
-    "BMW M3 (E92)",
-    [
-      { date: "2025-06-02", mileage: 82100, category: "CONTROLE_TECHNIQUE", description: "Contrôle technique périodique", garage: "Centre de contrôle (fictif)", parts: 0, labor: 78, invoice: true, nextDueDate: "2027-06-02" },
-      { date: "2026-03-20", mileage: 84600, category: "BATTERIE", description: "Remplacement batterie", garage: "Atelier (fictif)", parts: 210, labor: 40, components: ["batterie"] },
-    ],
-    componentIds,
-  );
-
-  const rs4 = await prisma.vehicle.create({
-    data: {
-      userId,
-      make: "Audi",
-      model: "RS4 Avant",
-      trim: "(B9)",
-      year: 2018,
-      engine: "V6 biturbo 2,9 L",
-      energy: "ESSENCE",
-      transmission: "AUTOMATIQUE",
-      mileage: 62100,
-      isDemo: true,
-      notes: "Véhicule de démonstration : données fictives.",
-    },
-  });
-  await prisma.reminder.create({
-    data: { vehicleId: rs4.id, title: "Révision", category: "REVISION", dueDate: d("2026-12-15"), dueMileage: 65000, notes: "Échéance personnelle (démo)." },
-  });
-
-  await prisma.vehicle.create({
-    data: {
-      userId,
-      make: "CarView",
-      model: "Berline générique",
-      trim: "démonstration 3D",
-      year: 2024,
-      engine: "4 cylindres essence (illustratif)",
-      energy: "ESSENCE",
-      transmission: "MANUELLE",
-      mileage: 15000,
-      isDemo: true,
-      model3dId: DEMO_MODEL_ID,
-      notes: "Véhicule fictif associé au modèle 3D de démonstration : toutes ses pièces sont illustratives.",
-    },
-  });
+  for (const demo of DEMO_GARAGE) {
+    const { acquiredAt, registration, ...fields } = demo.vehicle;
+    const vehicle = await prisma.vehicle.create({
+      data: {
+        ...fields,
+        userId,
+        acquiredAt: acquiredAt ? d(acquiredAt) : null,
+        registration: registration ?? null,
+        isDemo: true,
+        model3dId: demo.demoModel ? DEMO_MODEL_ID : null,
+      },
+    });
+    await addInterventions(userId, vehicle.id, demo.label, demo.interventions, componentIds);
+    for (const r of demo.reminders) {
+      await prisma.reminder.create({
+        data: { vehicleId: vehicle.id, title: r.title, category: r.category, dueDate: r.dueDate ? d(r.dueDate) : null, dueMileage: r.dueMileage ?? null, notes: r.notes },
+      });
+    }
+    await prisma.expense.createMany({
+      data: demo.expenses.map((e) => ({ vehicleId: vehicle.id, date: d(e.date), category: e.category, amountCents: Math.round(e.amount * 100), label: e.label })),
+    });
+  }
 }
 
 async function main() {

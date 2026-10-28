@@ -108,9 +108,9 @@ export function DashboardView({
         <p className="text-sm text-muted">Votre passion, notre moteur.</p>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-12">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Card className="overflow-hidden lg:col-span-7">
-          <div className="grid sm:grid-cols-[1fr_1.15fr]">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.15fr]">
             <div className="flex flex-col p-5">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold tracking-tight">{vehicleLabel(vehicle)}</h2>

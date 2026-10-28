@@ -1,0 +1,99 @@
+# Publie la démo hors ligne de CarView (sans serveur, données dans le navigateur)
+# sur GitHub Pages, comme Mes_Budgets_APP.
+# Prérequis (une seule fois) : Settings → Pages → Source : « GitHub Actions ».
+# La démo est servie sur https://<compte>.github.io/<nom-du-depot>/
+name: Démo GitHub Pages
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: carview
+          POSTGRES_PASSWORD: carview
+          POSTGRES_DB: carview_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U carview"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://carview:carview@localhost:5432/carview_test
+      TEST_DATABASE_URL: postgresql://carview:carview@localhost:5432/carview_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Vérifier les types (application et démo)
+        run: |
+          npm run typecheck
+          npm run demo:typecheck
+
+      - name: Tests unitaires et d'intégration
+        run: npm test
+
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Requis par la génération du client Prisma (aucune base n'est contactée).
+      DATABASE_URL: postgresql://unused:unused@localhost:5432/unused
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Construire la démo sous /<nom-du-depot>/
+        run: npm run demo:build
+        env:
+          DEMO_BASE: /${{ github.event.repository.name }}/
+
+      - name: Page 404 = index (routage côté client)
+        run: cp dist-demo/index.html dist-demo/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-demo
+
+  # L'environnement github-pages n'accepte que la branche par défaut : ailleurs
+  # (PR, autres branches) on s'arrête après les tests et le build.
+  deploy:
+    needs: [test, build]
+    if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

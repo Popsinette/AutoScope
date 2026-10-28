@@ -64,7 +64,7 @@ export function CatalogView({
           <EmptyState icon={Puzzle} title="Aucune pièce ne correspond">Modifiez la famille ou la recherche.</EmptyState>
         </Card>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {parts.map((p) => {
             const match = compatibilityFor(p.compatibility, vehicle);
             return (

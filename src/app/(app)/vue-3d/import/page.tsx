@@ -30,7 +30,7 @@ export default async function ImportModelPage({ searchParams }: { searchParams: 
         <ArrowLeft size={15} aria-hidden /> Vue 3D
       </Link>
       <PageHeader title="Modèle 3D du véhicule" subtitle={vehicleLabel(vehicle)} />
-      <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.3fr_1fr]">
         <div className="flex flex-col gap-5">
           {ownModel && (
             <Card>

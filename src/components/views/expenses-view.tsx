@@ -107,7 +107,7 @@ export function ExpensesView({
         </div>
       </div>
 
-      <div className="mb-5 grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+      <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
         <Card>
           <CardHeader icon={Wallet} title={`Total ${year ? year : "toutes périodes"}`} subtitle={all ? "Tous les véhicules" : vehicleLabel(vehicle!)} />
           <p className="px-5 text-4xl font-semibold tracking-tight tabular-nums" data-testid="expense-total">
@@ -140,7 +140,7 @@ export function ExpensesView({
             Aucune dépense ne correspond à ces filtres.
           </EmptyState>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[680px] text-sm">
               <caption className="sr-only">Liste des dépenses</caption>
               <thead className="border-y border-line text-left text-xs text-muted">

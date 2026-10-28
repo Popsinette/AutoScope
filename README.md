@@ -50,6 +50,26 @@ Production :
 npm run build && npm run start
 ```
 
+## Démo hors ligne (GitHub Pages)
+
+Une version de démonstration **sans serveur** est publiée sur GitHub Pages par le workflow `.github/workflows/deploy-demo.yml` : `https://<compte>.github.io/<nom-du-depot>/` (ici https://popsinette.github.io/AutoScope/). Elle s’ouvre sur ordinateur comme sur téléphone.
+
+- Aucune inscription : le garage de démonstration fictif est préchargé ; tout ce que vous ajoutez reste dans le navigateur (localStorage pour les données, IndexedDB pour les photos, factures et modèles GLB). Rien n’est envoyé sur Internet.
+- Mêmes écrans, mêmes validations et mêmes règles métier que l’application complète (une dépense par intervention, échéances date/km, vue 3D, import GLB). Paramètres → « Réinitialiser » ou « Tout effacer ».
+- Pas de comptes, pas de synchronisation entre appareils, pas de partage : c’est le rôle de l’application serveur.
+
+Mise en place (une seule fois) : Settings → Pages → Source : « GitHub Actions ». Le déploiement se fait à chaque push sur la branche par défaut du dépôt ; sur les autres branches et les PR, le workflow exécute seulement les tests et le build.
+
+Architecture : `demo/` est une application Vite monopage qui réutilise les vues et composants de `src/` (`src/components/views/*`). Des adaptateurs remplacent `next/link`, `next/navigation` et `next/dynamic` par React Router ; `demo/src/store` reproduit les services serveur sur un stockage local.
+
+```bash
+npm run demo:dev
+```
+
+```bash
+DEMO_BASE=/AutoScope/ npm run demo:build
+```
+
 ## Tests
 
 Unitaires et intégration (base `carview_test`, migrée automatiquement ; surchargez avec `TEST_DATABASE_URL`) :
@@ -62,6 +82,12 @@ Parcours utilisateurs (nécessite `npm run build` au préalable ; démarre `next
 
 ```bash
 npm run test:e2e
+```
+
+Parcours de la démo hors ligne (build Vite servi sous `/AutoScope/`, desktop + mobile) :
+
+```bash
+npx playwright test -c playwright.demo.config.ts
 ```
 
 Résultats de la dernière exécution : voir [docs/BILAN.md](docs/BILAN.md).
@@ -77,7 +103,9 @@ src/app/api            fichiers privés, export CSV/JSON, fiches composants, Bet
 src/server             services métier : chaque requête est filtrée par l'utilisateur
 src/lib                logique pure testée (échéances, dépenses, modes 3D, GLB, validation)
 src/components/viewer3d explorateur 3D (scène, véhicule procédural, fiche, arborescence)
-tests/                 Vitest (unit, integration) et Playwright (e2e)
+src/components/views   affichage des écrans, partagé par l'app serveur et la démo
+demo/                  démo hors ligne (Vite, React Router, stockage navigateur)
+tests/                 Vitest (unit, integration) et Playwright (e2e, e2e-demo)
 docs/                  guide 3D, licences, bilan
 ```
 

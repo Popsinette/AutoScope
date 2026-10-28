@@ -59,7 +59,7 @@ export function VehicleDetailView({
 
   return (
     <>
-      <div className="mb-5 grid gap-5 lg:grid-cols-[1.2fr_1fr]">
+      <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.2fr_1fr]">
         <div className="card relative overflow-hidden">
           <div className="aspect-[16/9] bg-bg">
             <VehiclePhoto vehicle={vehicle} src={photoSrc(vehicle)} />
@@ -121,7 +121,7 @@ export function VehicleDetailView({
         </Card>
       </div>
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader icon={Wrench} title="Entretien" subtitle="Dernières interventions" />
           <ul className="px-5 pb-4 text-sm">

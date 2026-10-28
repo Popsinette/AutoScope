@@ -74,7 +74,7 @@ export function InterventionDetailView({
         </div>
       </header>
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader title="Détails" />
           <dl className="grid gap-x-6 gap-y-4 px-5 pb-5 text-sm sm:grid-cols-3">

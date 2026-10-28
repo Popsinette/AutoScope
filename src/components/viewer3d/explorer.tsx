@@ -267,7 +267,7 @@ export function Explorer({
   const hoveredName = hovered ? bySlug[hovered]?.name : null;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[260px_1fr] xl:grid-cols-[260px_1fr_340px]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr] xl:grid-cols-[260px_1fr_340px]">
       {/* Arborescence : colonne sur ordinateur, panneau sur mobile */}
       <aside className="card hidden max-h-[calc(100dvh-210px)] min-h-[520px] flex-col lg:flex" aria-label="Arborescence des composants">
         <p className="px-4 pt-4 text-sm font-semibold">Composants</p>
@@ -276,7 +276,7 @@ export function Explorer({
 
       <section ref={sceneRef} className="card relative flex min-h-0 scroll-mt-16 flex-col overflow-hidden" aria-label="Scène 3D">
         <div className="flex items-center gap-2 border-b border-line p-2">
-          <div role="toolbar" aria-label="Modes d’affichage" className="-mx-1 flex flex-1 gap-1 overflow-x-auto px-1 lg:flex-wrap">
+          <div role="toolbar" aria-label="Modes d’affichage" className="relative -mx-1 flex flex-1 gap-1 overflow-x-auto px-1 lg:flex-wrap">
             {MODES.map((m) => {
               const a = availability[m.key];
               return (

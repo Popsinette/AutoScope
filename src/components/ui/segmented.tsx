@@ -4,7 +4,7 @@ import { cn } from "./cn";
 /** Groupe de filtres sous forme de liens (état conservé dans l'URL). */
 export function SegmentedLinks({ items, label }: { items: { href: string; label: string; active: boolean; count?: number }[]; label: string }) {
   return (
-    <nav aria-label={label} className="-mx-1 overflow-x-auto px-1">
+    <nav aria-label={label} className="relative -mx-1 min-w-0 max-w-full overflow-x-auto px-1">
       <ul className="flex w-max gap-1 rounded-[11px] border border-line bg-bg/60 p-1">
         {items.map((item) => (
           <li key={item.href}>

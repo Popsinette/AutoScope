@@ -18,7 +18,7 @@ export default async function SettingsPage() {
   return (
     <>
       <PageHeader title="Paramètres" subtitle="Compte, confidentialité et données personnelles." />
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader icon={UserRound} title="Compte" />
           <dl className="grid gap-3 px-5 pb-5 text-sm sm:grid-cols-2">
